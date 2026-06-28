@@ -76,14 +76,14 @@ export default function Home() {
     setPhotos([]);
 
     try {
-      const res = await fetch(`https://restcountries.com/v3.1/alpha/${isoCode}`);
+      const res = await fetch(`/api/country/${isoCode}`);
       const data = await res.json();
       setCountryData(data[0]);
     } catch (_) { }
 
     try {
       const res = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(countryName)}&per_page=4&client_id=YOUR_UNSPLASH_ACCESS_KEY`
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(countryName)}&per_page=4&client_id=${process.env.NEXT_PUBLIC_UNSPLASH_ACCESS_KEY}`
       );
       const data = await res.json();
       setPhotos(data.results || []);
