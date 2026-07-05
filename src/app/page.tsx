@@ -147,7 +147,7 @@ export default function Home() {
   };
 
   return (
-    <div className="relative w-screen h-screen bg-[#030712] overflow-hidden">
+    <div className="relative w-screen h-screen bg-[#020817] overflow-hidden">
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-sm px-4">
         <div className="relative">
           <input
@@ -155,15 +155,15 @@ export default function Home() {
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder="Search any country..."
-            className="w-full bg-white/10 backdrop-blur border border-white/20 text-white placeholder-white/40 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-white/40"
+            className="w-full bg-white backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-sky-400"
           />
           {searchResults.length > 0 && (
-            <div className="absolute top-full mt-1.5 w-full bg-[#0f1117] border border-white/10 rounded-xl overflow-hidden shadow-xl">
+            <div className="absolute top-full mt-1.5 w-full bg-white border border-gray-100 rounded-xl overflow-hidden shadow-xl">
               {searchResults.map((r) => (
                 <button
                   key={r.properties.ISO_A2}
                   onClick={() => flyToCountry(r)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   {r.properties.ADMIN}
                 </button>
@@ -177,36 +177,37 @@ export default function Home() {
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
-        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+        globeImageUrl="https://unpkg.com/three-globe/example/img/earth-dark.jpg"
+        backgroundImageUrl=""
+        showAtmosphere={true}
+        atmosphereColor="#0ea5e9"
+        atmosphereAltitude={0.15}
         polygonsData={countries.features}
-        polygonAltitude={(d) => (d === hoveredCountry || d === selectedCountry ? 0.06 : 0.01)}
+        polygonAltitude={(d) => (d === hoveredCountry || d === selectedCountry ? 0.04 : 0.001)}
         polygonCapColor={(d) =>
           d === selectedCountry
-            ? "rgba(99,102,241,0.85)"
+            ? "rgba(14,165,233,0.7)"
             : d === hoveredCountry
-              ? "rgba(255,255,255,0.25)"
-              : "rgba(255,255,255,0.05)"
+              ? "rgba(14,165,233,0.4)"
+              : "rgba(0,0,0,0)"
         }
-        polygonSideColor={() => "rgba(255,255,255,0.03)"}
-        polygonStrokeColor={() => "rgba(255,255,255,0.15)"}
+        polygonSideColor={() => "rgba(14,165,233,0.1)"}
+        polygonStrokeColor={() => "#0ea5e9"}
         polygonLabel={() => ""}
         onPolygonClick={handleCountryClick}
         onPolygonHover={handleCountryHover}
-        polygonsTransitionDuration={200}
-        atmosphereColor="rgba(100,149,237,0.3)"
-        atmosphereAltitude={0.15}
+        polygonsTransitionDuration={100}
       />
 
       {hoveredCountry && hoveredCountry !== selectedCountry && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur border border-white/20 text-white text-sm px-4 py-2 rounded-full pointer-events-none">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/10 backdrop-blur border border-gray-200 text-gray-800 text-sm px-4 py-2 rounded-full pointer-events-none">
           {hoveredCountry.properties.ADMIN}
         </div>
       )}
 
       {selectedCountry && (
-        <div className="absolute top-20 right-4 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-[#0f1117]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white">
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+        <div className="absolute top-20 right-4 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               {countryData?.flags?.png && (
                 <img src={countryData.flags.png} alt="flag" className="h-6 rounded mb-1" />
@@ -215,7 +216,7 @@ export default function Home() {
                 {countryData?.name?.common || selectedCountry.properties.ADMIN}
               </h2>
               {countryData?.name?.official && (
-                <p className="text-white/40 text-xs mt-0.5">{countryData.name.official}</p>
+                <p className="text-gray-400 text-xs mt-0.5">{countryData.name.official}</p>
               )}
             </div>
             <button
@@ -225,14 +226,14 @@ export default function Home() {
                 setPhotos([]);
                 globeRef.current.controls().autoRotate = true;
               }}
-              className="text-white/40 hover:text-white text-lg leading-none ml-2"
+              className="text-gray-400 hover:text-gray-800 text-lg leading-none ml-2"
             >
-              ✕
+              âœ•
             </button>
           </div>
 
           {loadingData ? (
-            <div className="p-6 text-center text-white/40 text-sm">Loading...</div>
+            <div className="p-6 text-center text-gray-400 text-sm">Loading...</div>
           ) : countryData ? (
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-2">
@@ -240,22 +241,22 @@ export default function Home() {
                   { label: "Capital", value: countryData.capital?.[0] },
                   { label: "Region", value: countryData.region },
                   { label: "Population", value: formatPopulation(countryData.population) },
-                  { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} km²` : "—" },
+                  { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} kmÂ²` : "â€”" },
                   { label: "Latitude", value: countryData.latlng?.[0]?.toFixed(4) },
                   { label: "Longitude", value: countryData.latlng?.[1]?.toFixed(4) },
                 ].map((item) => (
-                  <div key={item.label} className="bg-white/5 rounded-xl p-3">
-                    <p className="text-white/40 text-xs">{item.label}</p>
-                    <p className="text-white text-sm font-medium mt-0.5">{item.value || "—"}</p>
+                  <div key={item.label} className="bg-gray-50 rounded-xl p-3">
+                    <p className="text-gray-400 text-xs">{item.label}</p>
+                    <p className="text-gray-800 text-sm font-medium mt-0.5">{item.value || "â€”"}</p>
                   </div>
                 ))}
               </div>
 
               {countryData.currencies && (
-                <div className="bg-white/5 rounded-xl p-3">
-                  <p className="text-white/40 text-xs mb-1">Currency</p>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-gray-400 text-xs mb-1">Currency</p>
                   {Object.values(countryData.currencies).map((c) => (
-                    <p key={c.name} className="text-white text-sm font-medium">
+                    <p key={c.name} className="text-gray-800 text-sm font-medium">
                       {c.name} ({c.symbol})
                     </p>
                   ))}
@@ -263,9 +264,9 @@ export default function Home() {
               )}
 
               {countryData.languages && (
-                <div className="bg-white/5 rounded-xl p-3">
-                  <p className="text-white/40 text-xs mb-1">Languages</p>
-                  <p className="text-white text-sm font-medium">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-gray-400 text-xs mb-1">Languages</p>
+                  <p className="text-gray-800 text-sm font-medium">
                     {Object.values(countryData.languages).join(", ")}
                   </p>
                 </div>
@@ -273,7 +274,7 @@ export default function Home() {
 
               {photos.length > 0 && (
                 <div>
-                  <p className="text-white/40 text-xs mb-2">Photos</p>
+                  <p className="text-gray-400 text-xs mb-2">Photos</p>
                   <div className="grid grid-cols-2 gap-2">
                     {photos.map((photo) => (
                       <img
