@@ -82,14 +82,16 @@ export default function Home() {
     } catch (_) { }
 
     try {
-      const res = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(countryName)}&per_page=4&client_id=${process.env.NEXT_PUBLIC_UNSPLASH_ACCESS_KEY}`
-      );
+      const res = await fetch(`/api/unsplash/search?query=${encodeURIComponent(countryName)}`);
+      if (!res.ok) {
+        throw new Error("Unsplash request failed");
+      }
       const data = await res.json();
       setPhotos(data.results || []);
     } catch (_) { }
-
-    setLoadingData(false);
+    finally {
+      setLoadingData(false);
+    }
   };
 
   const handleCountryClick = useCallback((polygon: object) => {
