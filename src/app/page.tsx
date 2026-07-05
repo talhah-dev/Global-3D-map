@@ -167,6 +167,20 @@ export default function Home() {
                 Static overview for every selected country.
               </p>
             </div>
+            <button
+              onClick={() => {
+                setSelectedCountry(null);
+                setCountryData(null);
+                setRelatedImages([]);
+                setImagesLoaded(0);
+                setHoveredCountry(null);
+                globeRef.current.controls().autoRotate = true;
+              }}
+              className="shrink-0 text-gray-400 hover:text-gray-800 text-lg leading-none rounded-full w-8 h-8 flex items-center justify-center"
+              aria-label="Close country panel"
+            >
+              ×
+            </button>
           </div>
 
           {relatedImages.length > 0 && (
@@ -186,9 +200,7 @@ export default function Home() {
             </div>
           )}
 
-          {loadingData && imagesLoaded < relatedImages.length ? (
-            <div className="p-6 text-center text-gray-400 text-sm">Loading...</div>
-          ) : countryData ? (
+          {countryData ? (
             <div className="p-4 pt-3 pb-5 space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 {[
