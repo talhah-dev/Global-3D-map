@@ -30,22 +30,15 @@ interface CountryData {
   languages: Record<string, string>;
 }
 
-interface UnsplashPhoto {
-  id: string;
-  urls: { small: string; regular: string };
-  alt_description: string;
-}
-
 export default function Home() {
   const globeRef = useRef<any>(null);
+  const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [countries, setCountries] = useState<{ features: CountryFeature[] }>({ features: [] });
   const [hoveredCountry, setHoveredCountry] = useState<CountryFeature | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<CountryFeature | null>(null);
   const [countryData, setCountryData] = useState<CountryData | null>(null);
-  const [photos, setPhotos] = useState<UnsplashPhoto[]>([]);
+  const [relatedImages, setRelatedImages] = useState<string[]>([]);
   const [loadingData, setLoadingData] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<CountryFeature[]>([]);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
@@ -70,24 +63,29 @@ export default function Home() {
     }
   }, [countries]);
 
+  useEffect(() => {
+    import("three").then((THREE) => {
+      setGlobeMaterial(new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffffff") }));
+    });
+  }, []);
+
   const fetchCountryDetails = async (isoCode: string, countryName: string) => {
     setLoadingData(true);
     setCountryData(null);
-    setPhotos([]);
+    setRelatedImages([]);
 
     try {
       const res = await fetch(`/api/country/${isoCode}`);
       const data = await res.json();
-      setCountryData(data[0]);
-    } catch (_) { }
+      const country = data?.[0] ?? null;
+      setCountryData(country);
 
-    try {
-      const res = await fetch(`/api/unsplash/search?query=${encodeURIComponent(countryName)}`);
-      if (!res.ok) {
-        throw new Error("Unsplash request failed");
-      }
-      const data = await res.json();
-      setPhotos(data.results || []);
+      const imageBase = encodeURIComponent(country?.name?.common || countryName);
+      setRelatedImages([
+        `https://source.unsplash.com/featured/900x700/?${imageBase},landscape`,
+        `https://source.unsplash.com/featured/900x700/?${imageBase},city`,
+        `https://source.unsplash.com/featured/900x700/?${imageBase},travel`,
+      ]);
     } catch (_) { }
     finally {
       setLoadingData(false);
@@ -98,34 +96,10 @@ export default function Home() {
     const feature = polygon as CountryFeature;
     setSelectedCountry(feature);
     fetchCountryDetails(feature.properties.ISO_A2, feature.properties.ADMIN);
-    globeRef.current?.controls().autoRotate === true &&
-      (globeRef.current.controls().autoRotate = false);
-  }, []);
-
-  const handleCountryHover = useCallback((polygon: object | null) => {
-    setHoveredCountry(polygon as CountryFeature | null);
-  }, []);
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    const results = countries.features.filter((f) =>
-      f.properties.ADMIN.toLowerCase().includes(query.toLowerCase())
-    );
-    setSearchResults(results.slice(0, 5));
-  };
-
-  const flyToCountry = (feature: CountryFeature) => {
-    setSearchQuery(feature.properties.ADMIN);
-    setSearchResults([]);
-    setSelectedCountry(feature);
-    fetchCountryDetails(feature.properties.ISO_A2, feature.properties.ADMIN);
 
     const coords = feature.geometry as any;
-    let lat = 20, lng = 0;
+    let lat = 20;
+    let lng = 0;
 
     if (coords.type === "Polygon") {
       lng = coords.coordinates[0][0][0];
@@ -136,8 +110,13 @@ export default function Home() {
     }
 
     globeRef.current?.pointOfView({ lat, lng, altitude: 1.5 }, 1200);
-    globeRef.current.controls().autoRotate = false;
-  };
+    globeRef.current?.controls().autoRotate === true &&
+      (globeRef.current.controls().autoRotate = false);
+  }, []);
+
+  const handleCountryHover = useCallback((polygon: object | null) => {
+    setHoveredCountry(polygon as CountryFeature | null);
+  }, []);
 
   const formatPopulation = (n: number) => {
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + "B";
@@ -147,107 +126,75 @@ export default function Home() {
   };
 
   return (
-    <div className="relative w-screen h-screen bg-[#020817] overflow-hidden">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-sm px-4">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search any country..."
-            className="w-full bg-white backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-sky-400"
-          />
-          {searchResults.length > 0 && (
-            <div className="absolute top-full mt-1.5 w-full bg-white border border-gray-100 rounded-xl overflow-hidden shadow-xl">
-              {searchResults.map((r) => (
-                <button
-                  key={r.properties.ISO_A2}
-                  onClick={() => flyToCountry(r)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  {r.properties.ADMIN}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
+    <div className="relative w-screen h-screen bg-white overflow-hidden">
       <Globe
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        globeImageUrl="https://unpkg.com/three-globe/example/img/earth-dark.jpg"
+        backgroundColor="#ffffff"
+        globeImageUrl=""
         backgroundImageUrl=""
-        showAtmosphere={true}
-        atmosphereColor="#0ea5e9"
-        atmosphereAltitude={0.15}
+        showAtmosphere={false}
+        globeMaterial={globeMaterial}
         polygonsData={countries.features}
         polygonAltitude={(d) => (d === hoveredCountry || d === selectedCountry ? 0.04 : 0.001)}
         polygonCapColor={(d) =>
           d === selectedCountry
-            ? "rgba(14,165,233,0.7)"
+            ? "rgb(76, 214, 212)"
             : d === hoveredCountry
-              ? "rgba(14,165,233,0.4)"
+              ? "rgb(76, 214, 212)"
               : "rgba(0,0,0,0)"
         }
-        polygonSideColor={() => "rgba(14,165,233,0.1)"}
-        polygonStrokeColor={() => "#0ea5e9"}
+        polygonSideColor={() => "rgba(93,172,176,0.1)"}
+        polygonStrokeColor={() => "#4cd6d4"}
         polygonLabel={() => ""}
         onPolygonClick={handleCountryClick}
         onPolygonHover={handleCountryHover}
         polygonsTransitionDuration={100}
       />
 
-      {hoveredCountry && hoveredCountry !== selectedCountry && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/10 backdrop-blur border border-gray-200 text-gray-800 text-sm px-4 py-2 rounded-full pointer-events-none">
-          {hoveredCountry.properties.ADMIN}
-        </div>
-      )}
-
       {selectedCountry && (
-        <div className="absolute top-20 right-4 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              {countryData?.flags?.png && (
-                <img src={countryData.flags.png} alt="flag" className="h-6 rounded mb-1" />
-              )}
+        <div className="absolute top-20 right-4 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800">
+          <div className="p-4 border-b border-gray-100 flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="font-semibold text-base leading-tight">
                 {countryData?.name?.common || selectedCountry.properties.ADMIN}
               </h2>
-              {countryData?.name?.official && (
-                <p className="text-gray-400 text-xs mt-0.5">{countryData.name.official}</p>
-              )}
+              <p className="text-gray-400 text-xs mt-0.5">
+                Static overview for every selected country.
+              </p>
             </div>
-            <button
-              onClick={() => {
-                setSelectedCountry(null);
-                setCountryData(null);
-                setPhotos([]);
-                globeRef.current.controls().autoRotate = true;
-              }}
-              className="text-gray-400 hover:text-gray-800 text-lg leading-none ml-2"
-            >
-              âœ•
-            </button>
           </div>
 
           {loadingData ? (
             <div className="p-6 text-center text-gray-400 text-sm">Loading...</div>
           ) : countryData ? (
             <div className="p-4 space-y-4">
+              {relatedImages.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {relatedImages.map((src, index) => (
+                    <img
+                      key={`${src}-${index}`}
+                      src={src}
+                      alt={countryData.name.common}
+                      className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
+                    />
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: "Capital", value: countryData.capital?.[0] },
                   { label: "Region", value: countryData.region },
                   { label: "Population", value: formatPopulation(countryData.population) },
-                  { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} kmÂ²` : "â€”" },
+                  { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} km²` : "—" },
                   { label: "Latitude", value: countryData.latlng?.[0]?.toFixed(4) },
                   { label: "Longitude", value: countryData.latlng?.[1]?.toFixed(4) },
                 ].map((item) => (
                   <div key={item.label} className="bg-gray-50 rounded-xl p-3">
                     <p className="text-gray-400 text-xs">{item.label}</p>
-                    <p className="text-gray-800 text-sm font-medium mt-0.5">{item.value || "â€”"}</p>
+                    <p className="text-gray-800 text-sm font-medium mt-0.5">{item.value || "—"}</p>
                   </div>
                 ))}
               </div>
@@ -269,22 +216,6 @@ export default function Home() {
                   <p className="text-gray-800 text-sm font-medium">
                     {Object.values(countryData.languages).join(", ")}
                   </p>
-                </div>
-              )}
-
-              {photos.length > 0 && (
-                <div>
-                  <p className="text-gray-400 text-xs mb-2">Photos</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {photos.map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={photo.urls.small}
-                        alt={photo.alt_description}
-                        className="w-full h-24 object-cover rounded-xl"
-                      />
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
