@@ -38,6 +38,7 @@ export default function Home() {
   const [selectedCountry, setSelectedCountry] = useState<CountryFeature | null>(null);
   const [countryData, setCountryData] = useState<CountryData | null>(null);
   const [relatedImages, setRelatedImages] = useState<string[]>([]);
+  const [imagesLoaded, setImagesLoaded] = useState(0);
   const [loadingData, setLoadingData] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
@@ -73,19 +74,21 @@ export default function Home() {
     setLoadingData(true);
     setCountryData(null);
     setRelatedImages([]);
+    setImagesLoaded(0);
+
+    const imageBase = encodeURIComponent(countryName);
+    const requestSeed = `${imageBase}-${Date.now()}`;
+    setRelatedImages([
+      `https://picsum.photos/seed/${requestSeed}-1/900/700`,
+      `https://picsum.photos/seed/${requestSeed}-2/900/700`,
+      `https://picsum.photos/seed/${requestSeed}-3/900/700`,
+    ]);
 
     try {
       const res = await fetch(`/api/country/${isoCode}`);
       const data = await res.json();
       const country = data?.[0] ?? null;
       setCountryData(country);
-
-      const imageBase = encodeURIComponent(country?.name?.common || countryName);
-      setRelatedImages([
-        `https://source.unsplash.com/featured/900x700/?${imageBase},landscape`,
-        `https://source.unsplash.com/featured/900x700/?${imageBase},city`,
-        `https://source.unsplash.com/featured/900x700/?${imageBase},travel`,
-      ]);
     } catch (_) { }
     finally {
       setLoadingData(false);
@@ -166,23 +169,27 @@ export default function Home() {
             </div>
           </div>
 
-          {loadingData ? (
+          {relatedImages.length > 0 && (
+            <div className="p-4 pb-0">
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {relatedImages.map((src, index) => (
+                  <img
+                    key={`${src}-${index}`}
+                    src={src}
+                    alt={selectedCountry.properties.ADMIN}
+                    onLoad={() => setImagesLoaded((value) => value + 1)}
+                    onError={() => setImagesLoaded((value) => value + 1)}
+                    className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loadingData && imagesLoaded < relatedImages.length ? (
             <div className="p-6 text-center text-gray-400 text-sm">Loading...</div>
           ) : countryData ? (
-            <div className="p-4 space-y-4">
-              {relatedImages.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {relatedImages.map((src, index) => (
-                    <img
-                      key={`${src}-${index}`}
-                      src={src}
-                      alt={countryData.name.common}
-                      className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
-                    />
-                  ))}
-                </div>
-              )}
-
+            <div className="p-4 pt-3 pb-5 space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: "Capital", value: countryData.capital?.[0] },
