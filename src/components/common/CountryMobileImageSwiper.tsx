@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { IoChevronBack, IoChevronForward } from "react-icons/io5";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useEmblaCarousel from "embla-carousel-react";
 
 type CountryMobileImageSwiperProps = {
   images: string[];
@@ -11,6 +11,9 @@ type CountryMobileImageSwiperProps = {
   syncIndex?: number;
 };
 
+const TWEEN_FACTOR = 0.4;
+const RESUME_SYNC_DELAY_MS = 4000;
+
 export function CountryMobileImageSwiper({
   images,
   alt,
@@ -18,115 +21,148 @@ export function CountryMobileImageSwiper({
   onImageError,
   syncIndex,
 }: CountryMobileImageSwiperProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
   const [loadedIndices, setLoadedIndices] = useState<Record<number, boolean>>({});
+  const [isUserInteracting, setIsUserInteracting] = useState(false);
+  const [scales, setScales] = useState<number[]>([]);
+  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: true,
+    align: "center",
+    containScroll: false,
+    dragFree: false,
+    skipSnaps: false,
+  });
 
   useEffect(() => {
-    setActiveIndex(0);
     setLoadedIndices({});
   }, [images]);
 
+  const applyScale = useCallback((api: NonNullable<typeof emblaApi>) => {
+    const scrollSnaps = api.scrollSnapList();
+    const engine = api.internalEngine();
+    const scrollProgress = api.scrollProgress();
+
+    const nextScales = scrollSnaps.map((snap, index) => {
+      let diff = snap - scrollProgress;
+
+      engine.slideLooper.loopPoints.forEach((loopItem) => {
+        const target = loopItem.target();
+        if (index === loopItem.index && target !== 0) {
+          const sign = Math.sign(target);
+          if (sign === -1) diff = snap - (1 + scrollProgress);
+          if (sign === 1) diff = snap + (1 - scrollProgress);
+        }
+      });
+
+      const tween = 1 - Math.min(Math.abs(diff / TWEEN_FACTOR), 1);
+      return 0.82 + tween * 0.28;
+    });
+
+    setScales(nextScales);
+  }, []);
+
   useEffect(() => {
-    if (typeof syncIndex === "number" && images.length > 0) {
-      setActiveIndex(((syncIndex % images.length) + images.length) % images.length);
-    }
-  }, [syncIndex, images.length]);
+    if (!emblaApi) return;
 
-  const markLoaded = (index: number) => {
-    setLoadedIndices((current) => {
-      if (current[index]) return current;
-      return { ...current, [index]: true };
-    });
-    onImageLoad();
-  };
+    const handlePointerDown = () => {
+      if (resumeTimeoutRef.current) {
+        clearTimeout(resumeTimeoutRef.current);
+        resumeTimeoutRef.current = null;
+      }
+      setIsUserInteracting(true);
+    };
 
-  const markError = (index: number) => {
-    setLoadedIndices((current) => {
-      if (current[index]) return current;
-      return { ...current, [index]: true };
-    });
-    onImageError();
-  };
+    const handleSettle = () => {
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = setTimeout(() => {
+        setIsUserInteracting(false);
+      }, RESUME_SYNC_DELAY_MS);
+    };
+
+    const handleUpdate = () => applyScale(emblaApi);
+
+    applyScale(emblaApi);
+
+    emblaApi.on("pointerDown", handlePointerDown);
+    emblaApi.on("settle", handleSettle);
+    emblaApi.on("scroll", handleUpdate);
+    emblaApi.on("reInit", handleUpdate);
+
+    return () => {
+      emblaApi.off("pointerDown", handlePointerDown);
+      emblaApi.off("settle", handleSettle);
+      emblaApi.off("scroll", handleUpdate);
+      emblaApi.off("reInit", handleUpdate);
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+    };
+  }, [emblaApi, applyScale]);
+
+  useEffect(() => {
+    if (!emblaApi || typeof syncIndex !== "number" || isUserInteracting) return;
+    emblaApi.scrollTo(syncIndex);
+  }, [emblaApi, syncIndex, isUserInteracting]);
+
+  const markLoaded = useCallback(
+    (index: number) => {
+      setLoadedIndices((current) => {
+        if (current[index]) return current;
+        return { ...current, [index]: true };
+      });
+      onImageLoad();
+    },
+    [onImageLoad]
+  );
+
+  const markError = useCallback(
+    (index: number) => {
+      setLoadedIndices((current) => {
+        if (current[index]) return current;
+        return { ...current, [index]: true };
+      });
+      onImageError();
+    },
+    [onImageError]
+  );
 
   const hasImages = images.length > 0;
-  const isCurrentLoaded = loadedIndices[activeIndex];
-
-  const goPrev = () => {
-    setActiveIndex((value) => (value - 1 + images.length) % images.length);
-  };
-
-  const goNext = () => {
-    setActiveIndex((value) => (value + 1) % images.length);
-  };
 
   return (
-    <div className="relative mx-auto flex w-full max-w-sm flex-col items-center pb-3">
-      <div className="relative w-full overflow-hidden rounded-3xl bg-white shadow-xl">
-        <div className="flex items-center justify-center">
-          <button
-            type="button"
-            onClick={goPrev}
-            disabled={!hasImages}
-            className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 text-gray-700 shadow-md disabled:opacity-40"
-            aria-label="Previous image"
-          >
-            <IoChevronBack className="h-3 w-3" />
-          </button>
+    <div className="relative mx-auto flex h-full w-full flex-col items-center justify-center">
+      {hasImages && (
+        <div className="w-full max-w-md overflow-visible" ref={emblaRef}>
+          <div className="flex touch-pan-y">
+            {images.map((src, index) => {
+              const isCurrentLoaded = loadedIndices[index];
+              const scale = scales[index] ?? 0.82;
 
-          <div className="relative w-full overflow-hidden rounded-xl pt-[78%]">
-            {!isCurrentLoaded && (
-              <div className="absolute inset-0 rounded-xl bg-gray-100 animate-pulse" />
-            )}
-
-            {hasImages && (
-              <div
-                className="absolute inset-0 flex h-full w-full transition-transform duration-500 ease-in-out"
-                style={{
-                  transform: `translateX(-${activeIndex * 100}%)`,
-                }}
-              >
-                {images.map((src, index) => (
+              return (
+                <div
+                  key={src + index}
+                  className="relative min-w-0 shrink-0 basis-[92%]"
+                  style={{ zIndex: Math.round(scale * 100) }}
+                >
                   <div
-                    key={src + index}
-                    className="relative h-full w-full flex-shrink-0"
+                    className="relative aspect-[16/9] w-full origin-center overflow-hidden rounded-sm bg-white shadow-xl"
+                    style={{ transform: `scale(${scale})` }}
                   >
+                    {!isCurrentLoaded && (
+                      <div className="absolute inset-0 rounded-sm bg-gray-100 animate-pulse" />
+                    )}
                     <img
                       src={src}
                       alt={alt}
+                      draggable={false}
                       onLoad={() => markLoaded(index)}
                       onError={() => markError(index)}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full object-cover transition-opacity duration-300 ${isCurrentLoaded ? "opacity-100" : "opacity-0"
+                        }`}
                     />
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              );
+            })}
           </div>
-
-          <button
-            type="button"
-            onClick={goNext}
-            disabled={!hasImages}
-            className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-2 text-gray-700 shadow-md disabled:opacity-40"
-            aria-label="Next image"
-          >
-            <IoChevronForward className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-
-      {hasImages && (
-        <div className="mt-3 flex items-center justify-center gap-2">
-          {images.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => setActiveIndex(index)}
-              className={`h-2.5 rounded-full transition-all ${index === activeIndex ? "w-6 bg-teal-400" : "w-2.5 bg-gray-300"
-                }`}
-              aria-label={`Go to image ${index + 1}`}
-            />
-          ))}
         </div>
       )}
     </div>

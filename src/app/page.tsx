@@ -112,7 +112,7 @@ function DestinationCard({
 }) {
   return (
     <div
-      className="absolute overflow-hidden rounded-2xl shadow-xl"
+      className="absolute overflow-hidden rounded-sm shadow-xl"
       style={{
         left: x,
         top: y,
@@ -303,10 +303,8 @@ export default function Home() {
         ))}
       </div>
 
-      // .
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center md:hidden">
-        <div className="pointer-events-auto w-full max-w-sm px-4">
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
+        <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
           <CountryMobileImageSwiper
             images={DESTINATIONS.map((destination) => destinationImages[destination.name]).filter(Boolean) as string[]}
             alt="Featured destination"
@@ -316,6 +314,8 @@ export default function Home() {
           />
         </div>
       </div>
+
+
     </div>
   );
 }
