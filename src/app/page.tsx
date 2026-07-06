@@ -1,8 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { CountryImageSkeleton } from "@/components/common/CountryImageSkeleton";
+import { useEffect, useRef, useState } from "react";
 import { CountryMobileImageSwiper } from "@/components/common/CountryMobileImageSwiper";
 
 const Globe = dynamic(() => import("react-globe.gl"), { ssr: false });
@@ -16,32 +15,132 @@ interface CountryProperties {
 interface CountryFeature {
   type: string;
   properties: CountryProperties;
-  geometry: object;
+  geometry: any;
 }
 
-interface CountryData {
-  name: { common: string; official: string };
-  capital: string[];
-  population: number;
-  area: number;
-  region: string;
-  subregion: string;
-  latlng: number[];
-  flags: { png: string; svg: string };
-  currencies: Record<string, { name: string; symbol: string }>;
-  languages: Record<string, string>;
+type OrbitDestination = {
+  name: string;
+  baseAngle: number;
+  verticalOffset: number;
+  width: number;
+  height: number;
+};
+
+const DESTINATIONS: OrbitDestination[] = [
+  { name: "Bahamas", baseAngle: 0, verticalOffset: -50, width: 460, height: 250 },
+  { name: "Mexico", baseAngle: 300, verticalOffset: -230, width: 260, height: 170 },
+  { name: "Costa Rica", baseAngle: 250, verticalOffset: -20, width: 240, height: 160 },
+  { name: "Puerto Rico", baseAngle: 220, verticalOffset: 130, width: 260, height: 170 },
+  { name: "Caribbean", baseAngle: 150, verticalOffset: 220, width: 230, height: 180 },
+  { name: "Europe", baseAngle: 60, verticalOffset: -40, width: 220, height: 260 },
+];
+
+function isPointInRing(lng: number, lat: number, ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function isPointInFeature(lng: number, lat: number, feature: CountryFeature) {
+  const geometry = feature.geometry;
+  if (geometry.type === "Polygon") {
+    return isPointInRing(lng, lat, geometry.coordinates[0]);
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.some((polygon: number[][][]) =>
+      isPointInRing(lng, lat, polygon[0])
+    );
+  }
+  return false;
+}
+
+function buildDottedGlobeTexture(features: CountryFeature[]) {
+  const width = 480;
+  const height = 240;
+  const step = 3;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#4cd6d4";
+
+  for (let y = 0; y < height; y += step) {
+    const lat = 90 - (y / height) * 180;
+    for (let x = 0; x < width; x += step) {
+      const lng = (x / width) * 360 - 180;
+      const isLand = features.some((feature) => isPointInFeature(lng, lat, feature));
+      if (isLand) {
+        ctx.beginPath();
+        ctx.arc(x, y, 0.85, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  return canvas.toDataURL();
+}
+
+function DestinationCard({
+  name,
+  image,
+  x,
+  y,
+  width,
+  height,
+  scale,
+}: {
+  name: string;
+  image: string | undefined;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale: number;
+}) {
+  return (
+    <div
+      className="absolute overflow-hidden rounded-2xl shadow-xl"
+      style={{
+        left: x,
+        top: y,
+        width,
+        height,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+      }}
+    >
+      {image ? (
+        <img src={image} alt={name} className="h-full w-full object-cover" />
+      ) : (
+        <div className="h-full w-full bg-gradient-to-br from-teal-200 via-slate-200 to-slate-300" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+      <p className="absolute bottom-3 left-4 text-lg font-light text-white">{name}</p>
+    </div>
+  );
 }
 
 export default function Home() {
   const globeRef = useRef<any>(null);
-  const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [countries, setCountries] = useState<{ features: CountryFeature[] }>({ features: [] });
-  const [hoveredCountry, setHoveredCountry] = useState<CountryFeature | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<CountryFeature | null>(null);
-  const [countryData, setCountryData] = useState<CountryData | null>(null);
-  const [relatedImages, setRelatedImages] = useState<string[]>([]);
-  const [imagesLoaded, setImagesLoaded] = useState(0);
+  const [globeTexture, setGlobeTexture] = useState("");
+  const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [rotationDeg, setRotationDeg] = useState(0);
+  const [destinationImages, setDestinationImages] = useState<Record<string, string>>({});
+  const prevAngleRef = useRef(0);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -59,10 +158,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (globeRef.current) {
-      globeRef.current.controls().autoRotate = true;
-      globeRef.current.controls().autoRotateSpeed = 0.4;
+    if (countries.features.length === 0) return;
+
+    const cached = window.localStorage.getItem("dotted-globe-texture-v2");
+    if (cached) {
+      setGlobeTexture(cached);
+      return;
     }
+
+    const texture = buildDottedGlobeTexture(countries.features);
+    setGlobeTexture(texture);
+    window.localStorage.setItem("dotted-globe-texture-v2", texture);
   }, [countries]);
 
   useEffect(() => {
@@ -71,246 +177,143 @@ export default function Home() {
     });
   }, []);
 
-  const fetchCountryDetails = async (isoCode: string, countryName: string) => {
-    setCountryData(null);
-    setRelatedImages([]);
-    setImagesLoaded(0);
+  useEffect(() => {
+    if (globeRef.current) {
+      globeRef.current.controls().autoRotate = true;
+      globeRef.current.controls().autoRotateSpeed = 0.6;
+    }
+  }, [countries]);
 
-    try {
-      const [countryResult, photoResult] = await Promise.allSettled([
-        fetch(`/api/country/${isoCode}`),
-        fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(countryName)}&per_page=3`, {
-          headers: {
-            Authorization: process.env.NEXT_PUBLIC_PEXELS_ACCESS_KEY || "",
-          },
-        }).then((res) => res.json()),
-      ]);
+  useEffect(() => {
+    let frameId: number;
 
-      if (countryResult.status === "fulfilled") {
-        const countryDataJson = await countryResult.value.json();
-        setCountryData(countryDataJson?.[0] ?? null);
+    const tick = () => {
+      const controls = globeRef.current?.controls();
+      if (controls) {
+        const angle = controls.getAzimuthalAngle();
+        let delta = angle - prevAngleRef.current;
+        if (delta > Math.PI) delta -= Math.PI * 2;
+        if (delta < -Math.PI) delta += Math.PI * 2;
+        prevAngleRef.current = angle;
+        setRotationDeg((value) => value + delta * (180 / Math.PI));
       }
+      frameId = requestAnimationFrame(tick);
+    };
 
-      if (photoResult.status === "fulfilled") {
-        const photos = Array.isArray(photoResult.value?.photos) ? photoResult.value.photos : [];
-        setRelatedImages(
-          photos
-            .map((photo: { src?: { large?: string; medium?: string } }) => photo?.src?.large || photo?.src?.medium)
-            .filter(Boolean)
-        );
-      }
-    } catch (_) { }
-  };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
 
-  const handleCountryClick = useCallback((polygon: object) => {
-    const feature = polygon as CountryFeature;
-    setSelectedCountry(feature);
-    fetchCountryDetails(feature.properties.ISO_A2, feature.properties.ADMIN);
+  useEffect(() => {
+    let cancelled = false;
 
-    const coords = feature.geometry as any;
-    let lat = 20;
-    let lng = 0;
+    async function loadImages() {
+      const key = process.env.NEXT_PUBLIC_PEXELS_ACCESS_KEY;
+      if (!key) return;
 
-    if (coords.type === "Polygon") {
-      lng = coords.coordinates[0][0][0];
-      lat = coords.coordinates[0][0][1];
-    } else if (coords.type === "MultiPolygon") {
-      lng = coords.coordinates[0][0][0][0];
-      lat = coords.coordinates[0][0][0][1];
+      const results = await Promise.allSettled(
+        DESTINATIONS.map((destination) =>
+          fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(destination.name)}&per_page=1`, {
+            headers: { Authorization: key },
+          }).then((res) => res.json())
+        )
+      );
+
+      if (cancelled) return;
+
+      const next: Record<string, string> = {};
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const photo = result.value?.photos?.[0];
+          const url = photo?.src?.large || photo?.src?.medium;
+          if (url) next[DESTINATIONS[index].name] = url;
+        }
+      });
+
+      setDestinationImages(next);
     }
 
-    globeRef.current?.pointOfView({ lat, lng, altitude: 1.5 }, 1200);
-    globeRef.current?.controls().autoRotate === true &&
-      (globeRef.current.controls().autoRotate = false);
+    loadImages();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleCountryHover = useCallback((polygon: object | null) => {
-    setHoveredCountry(polygon as CountryFeature | null);
-  }, []);
+  const centerX = dimensions.width / 2;
+  const centerY = dimensions.height / 2;
+  const horizontalRadius = Math.min(dimensions.width, dimensions.height) * 0.62;
 
-  const formatPopulation = (n: number) => {
-    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + "B";
-    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-    if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
-    return n?.toString();
-  };
+  const positioned = DESTINATIONS.map((destination) => {
+    const angleRad = ((destination.baseAngle + rotationDeg) * Math.PI) / 180;
+    const depth = Math.cos(angleRad);
+    const x = centerX + horizontalRadius * Math.sin(angleRad);
+    const y = centerY + destination.verticalOffset;
+    const scale = 0.88 + 0.12 * ((depth + 1) / 2);
+    return { destination, x, y, depth, scale };
+  });
+
+  const frontCards = positioned.filter((item) => item.depth > 0);
+  const backCards = positioned.filter((item) => item.depth <= 0);
+
+  const mobileIndex =
+    ((Math.round(rotationDeg / 60) % DESTINATIONS.length) + DESTINATIONS.length) % DESTINATIONS.length;
 
   return (
     <div className="relative w-screen h-screen bg-white overflow-hidden">
-      <Globe
-        ref={globeRef}
-        width={dimensions.width}
-        height={dimensions.height}
-        backgroundColor="#ffffff"
-        globeImageUrl=""
-        backgroundImageUrl=""
-        showAtmosphere={false}
-        globeMaterial={globeMaterial}
-        polygonsData={countries.features}
-        polygonAltitude={(d) => (d === hoveredCountry || d === selectedCountry ? 0.04 : 0.001)}
-        polygonCapColor={(d) =>
-          d === selectedCountry
-            ? "rgb(76, 214, 212)"
-            : d === hoveredCountry
-              ? "rgb(76, 214, 212)"
-              : "rgba(0,0,0,0)"
-        }
-        polygonSideColor={() => "rgba(93,172,176,0.1)"}
-        polygonStrokeColor={() => "#4cd6d4"}
-        polygonLabel={() => ""}
-        onPolygonClick={handleCountryClick}
-        onPolygonHover={handleCountryHover}
-        polygonsTransitionDuration={100}
-      />
+      <div className="pointer-events-none absolute inset-0 z-0 hidden md:block">
+        {backCards.map((item) => (
+          <DestinationCard
+            key={item.destination.name}
+            name={item.destination.name}
+            image={destinationImages[item.destination.name]}
+            x={item.x}
+            y={item.y}
+            width={item.destination.width}
+            height={item.destination.height}
+            scale={item.scale}
+          />
+        ))}
+      </div>
 
-      {selectedCountry && (
-        <div className="absolute top-20 right-4 hidden w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800 md:block">
-          <div className="p-4 border-b border-gray-100 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="font-semibold text-base leading-tight">
-                {countryData?.name?.common || selectedCountry.properties.ADMIN}
-              </h2>
-              <p className="text-gray-400 text-xs mt-0.5">
-                Static overview for every selected country.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedCountry(null);
-                setCountryData(null);
-                setRelatedImages([]);
-                setImagesLoaded(0);
-                setHoveredCountry(null);
-                globeRef.current.controls().autoRotate = true;
-              }}
-              className="shrink-0 text-gray-400 hover:text-gray-800 text-lg leading-none rounded-full w-8 h-8 flex items-center justify-center"
-              aria-label="Close country panel"
-            >
-              ×
-            </button>
-          </div>
+      <div className="relative z-10 h-full w-full">
+        <Globe
+          ref={globeRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          backgroundColor="rgba(0,0,0,0)"
+          globeImageUrl={globeTexture || undefined}
+          globeMaterial={globeMaterial}
+          showAtmosphere={false}
+          showGraticules={false}
+        />
+      </div>
 
-          {relatedImages.length > 0 && (
-            <div className="p-4 pb-0">
-              <div className="relative">
-                <div className={imagesLoaded < relatedImages.length ? "block" : "hidden"}>
-                  <CountryImageSkeleton />
-                </div>
-                <div className={imagesLoaded < relatedImages.length ? "pointer-events-none opacity-0 absolute inset-0" : "grid grid-cols-2 gap-2 mb-5"}>
-                  {relatedImages.map((src, index) => (
-                    <img
-                      key={`${src}-${index}`}
-                      src={src}
-                      alt={selectedCountry.properties.ADMIN}
-                      onLoad={() => setImagesLoaded((value) => value + 1)}
-                      onError={() => setImagesLoaded((value) => value + 1)}
-                      className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+      <div className="pointer-events-none absolute inset-0 z-20 hidden md:block">
+        {frontCards.map((item) => (
+          <DestinationCard
+            key={item.destination.name}
+            name={item.destination.name}
+            image={destinationImages[item.destination.name]}
+            x={item.x}
+            y={item.y}
+            width={item.destination.width}
+            height={item.destination.height}
+            scale={item.scale}
+          />
+        ))}
+      </div>
 
-          {countryData ? (
-            <div className="p-4 pt-3 pb-5 space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: "Capital", value: countryData.capital?.[0] },
-                  { label: "Region", value: countryData.region },
-                  { label: "Population", value: formatPopulation(countryData.population) },
-                  { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} km²` : "—" },
-                  { label: "Latitude", value: countryData.latlng?.[0]?.toFixed(4) },
-                  { label: "Longitude", value: countryData.latlng?.[1]?.toFixed(4) },
-                ].map((item) => (
-                  <div key={item.label} className="bg-gray-50 rounded-xl p-3">
-                    <p className="text-gray-400 text-xs">{item.label}</p>
-                    <p className="text-gray-800 text-sm font-medium mt-0.5">{item.value || "—"}</p>
-                  </div>
-                ))}
-              </div>
-
-              {countryData.currencies && (
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-gray-400 text-xs mb-1">Currency</p>
-                  {Object.values(countryData.currencies).map((c) => (
-                    <p key={c.name} className="text-gray-800 text-sm font-medium">
-                      {c.name} ({c.symbol})
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {countryData.languages && (
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-gray-400 text-xs mb-1">Languages</p>
-                  <p className="text-gray-800 text-sm font-medium">
-                    {Object.values(countryData.languages).join(", ")}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : null}
+      <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center md:hidden">
+        <div className="pointer-events-auto w-full max-w-sm px-4">
+          <CountryMobileImageSwiper
+            images={DESTINATIONS.map((destination) => destinationImages[destination.name]).filter(Boolean) as string[]}
+            alt="Featured destination"
+            onImageLoad={() => { }}
+            onImageError={() => { }}
+            syncIndex={mobileIndex}
+          />
         </div>
-      )}
-
-      {selectedCountry && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center p-4 md:hidden">
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-gray-100 bg-white/95 text-gray-800 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4">
-              <div className="min-w-0 pr-2">
-                <h2 className="font-semibold text-lg leading-tight">
-                  {countryData?.name?.common || selectedCountry.properties.ADMIN}
-                </h2>
-                <p className="text-gray-400 text-xs mt-0.5">
-                  Swipe the carousel to preview the country.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedCountry(null);
-                  setCountryData(null);
-                  setRelatedImages([]);
-                  setImagesLoaded(0);
-                  setHoveredCountry(null);
-                  globeRef.current.controls().autoRotate = true;
-                }}
-                className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-gray-400 hover:text-gray-800"
-                aria-label="Close country panel"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="p-4 pb-0">
-              <CountryMobileImageSwiper
-                images={relatedImages}
-                alt={selectedCountry.properties.ADMIN}
-                onImageLoad={() => setImagesLoaded((value) => value + 1)}
-                onImageError={() => setImagesLoaded((value) => value + 1)}
-              />
-            </div>
-
-            {countryData && (
-              <div className="space-y-3 p-4 pt-3 pb-5">
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Capital", value: countryData.capital?.[0] },
-                    { label: "Region", value: countryData.region },
-                    { label: "Population", value: formatPopulation(countryData.population) },
-                    { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} km²` : "—" },
-                  ].map((item) => (
-                    <div key={item.label} className="rounded-xl bg-gray-50 p-3">
-                      <p className="text-xs text-gray-400">{item.label}</p>
-                      <p className="mt-0.5 text-sm font-medium text-gray-800">{item.value || "—"}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

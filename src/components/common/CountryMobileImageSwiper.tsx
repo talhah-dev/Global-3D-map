@@ -8,6 +8,7 @@ type CountryMobileImageSwiperProps = {
   alt: string;
   onImageLoad: () => void;
   onImageError: () => void;
+  syncIndex?: number;
 };
 
 export function CountryMobileImageSwiper({
@@ -15,6 +16,7 @@ export function CountryMobileImageSwiper({
   alt,
   onImageLoad,
   onImageError,
+  syncIndex,
 }: CountryMobileImageSwiperProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedIndices, setLoadedIndices] = useState<Record<number, boolean>>({});
@@ -23,6 +25,12 @@ export function CountryMobileImageSwiper({
     setActiveIndex(0);
     setLoadedIndices({});
   }, [images]);
+
+  useEffect(() => {
+    if (typeof syncIndex === "number" && images.length > 0) {
+      setActiveIndex(((syncIndex % images.length) + images.length) % images.length);
+    }
+  }, [syncIndex, images.length]);
 
   const markLoaded = (index: number) => {
     setLoadedIndices((current) => {
