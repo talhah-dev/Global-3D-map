@@ -186,13 +186,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (globeRef.current) {
-      globeRef.current.controls().autoRotate = true;
-      globeRef.current.controls().autoRotateSpeed = 0.6;
-    }
-  }, [countries]);
-
-  useEffect(() => {
     let frameId: number;
 
     const tick = () => {
