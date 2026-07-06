@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { CountryImageSkeleton } from "@/components/common/CountryImageSkeleton";
+import { CountryMobileImageSwiper } from "@/components/common/CountryMobileImageSwiper";
 
 const Globe = dynamic(() => import("react-globe.gl"), { ssr: false });
 
@@ -39,7 +41,6 @@ export default function Home() {
   const [countryData, setCountryData] = useState<CountryData | null>(null);
   const [relatedImages, setRelatedImages] = useState<string[]>([]);
   const [imagesLoaded, setImagesLoaded] = useState(0);
-  const [loadingData, setLoadingData] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
@@ -71,28 +72,34 @@ export default function Home() {
   }, []);
 
   const fetchCountryDetails = async (isoCode: string, countryName: string) => {
-    setLoadingData(true);
     setCountryData(null);
     setRelatedImages([]);
     setImagesLoaded(0);
 
-    const imageBase = encodeURIComponent(countryName);
-    const requestSeed = `${imageBase}-${Date.now()}`;
-    setRelatedImages([
-      `https://picsum.photos/seed/${requestSeed}-1/900/700`,
-      `https://picsum.photos/seed/${requestSeed}-2/900/700`,
-      `https://picsum.photos/seed/${requestSeed}-3/900/700`,
-    ]);
-
     try {
-      const res = await fetch(`/api/country/${isoCode}`);
-      const data = await res.json();
-      const country = data?.[0] ?? null;
-      setCountryData(country);
+      const [countryResult, photoResult] = await Promise.allSettled([
+        fetch(`/api/country/${isoCode}`),
+        fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(countryName)}&per_page=3`, {
+          headers: {
+            Authorization: process.env.NEXT_PUBLIC_PEXELS_ACCESS_KEY || "",
+          },
+        }).then((res) => res.json()),
+      ]);
+
+      if (countryResult.status === "fulfilled") {
+        const countryDataJson = await countryResult.value.json();
+        setCountryData(countryDataJson?.[0] ?? null);
+      }
+
+      if (photoResult.status === "fulfilled") {
+        const photos = Array.isArray(photoResult.value?.photos) ? photoResult.value.photos : [];
+        setRelatedImages(
+          photos
+            .map((photo: { src?: { large?: string; medium?: string } }) => photo?.src?.large || photo?.src?.medium)
+            .filter(Boolean)
+        );
+      }
     } catch (_) { }
-    finally {
-      setLoadingData(false);
-    }
   };
 
   const handleCountryClick = useCallback((polygon: object) => {
@@ -157,7 +164,7 @@ export default function Home() {
       />
 
       {selectedCountry && (
-        <div className="absolute top-20 right-4 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800">
+        <div className="absolute top-20 right-4 hidden w-80 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl text-gray-800 md:block">
           <div className="p-4 border-b border-gray-100 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="font-semibold text-base leading-tight">
@@ -185,17 +192,22 @@ export default function Home() {
 
           {relatedImages.length > 0 && (
             <div className="p-4 pb-0">
-              <div className="grid grid-cols-2 gap-2 mb-5">
-                {relatedImages.map((src, index) => (
-                  <img
-                    key={`${src}-${index}`}
-                    src={src}
-                    alt={selectedCountry.properties.ADMIN}
-                    onLoad={() => setImagesLoaded((value) => value + 1)}
-                    onError={() => setImagesLoaded((value) => value + 1)}
-                    className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
-                  />
-                ))}
+              <div className="relative">
+                <div className={imagesLoaded < relatedImages.length ? "block" : "hidden"}>
+                  <CountryImageSkeleton />
+                </div>
+                <div className={imagesLoaded < relatedImages.length ? "pointer-events-none opacity-0 absolute inset-0" : "grid grid-cols-2 gap-2 mb-5"}>
+                  {relatedImages.map((src, index) => (
+                    <img
+                      key={`${src}-${index}`}
+                      src={src}
+                      alt={selectedCountry.properties.ADMIN}
+                      onLoad={() => setImagesLoaded((value) => value + 1)}
+                      onError={() => setImagesLoaded((value) => value + 1)}
+                      className={index === 0 ? "col-span-2 h-36 w-full object-cover rounded-xl" : "h-24 w-full object-cover rounded-xl"}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -239,6 +251,64 @@ export default function Home() {
               )}
             </div>
           ) : null}
+        </div>
+      )}
+
+      {selectedCountry && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center p-4 md:hidden">
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-gray-100 bg-white/95 text-gray-800 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4">
+              <div className="min-w-0 pr-2">
+                <h2 className="font-semibold text-lg leading-tight">
+                  {countryData?.name?.common || selectedCountry.properties.ADMIN}
+                </h2>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Swipe the carousel to preview the country.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedCountry(null);
+                  setCountryData(null);
+                  setRelatedImages([]);
+                  setImagesLoaded(0);
+                  setHoveredCountry(null);
+                  globeRef.current.controls().autoRotate = true;
+                }}
+                className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-gray-400 hover:text-gray-800"
+                aria-label="Close country panel"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-4 pb-0">
+              <CountryMobileImageSwiper
+                images={relatedImages}
+                alt={selectedCountry.properties.ADMIN}
+                onImageLoad={() => setImagesLoaded((value) => value + 1)}
+                onImageError={() => setImagesLoaded((value) => value + 1)}
+              />
+            </div>
+
+            {countryData && (
+              <div className="space-y-3 p-4 pt-3 pb-5">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Capital", value: countryData.capital?.[0] },
+                    { label: "Region", value: countryData.region },
+                    { label: "Population", value: formatPopulation(countryData.population) },
+                    { label: "Area", value: countryData.area ? `${countryData.area.toLocaleString()} km²` : "—" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-400">{item.label}</p>
+                      <p className="mt-0.5 text-sm font-medium text-gray-800">{item.value || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
