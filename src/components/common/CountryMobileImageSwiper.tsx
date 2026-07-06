@@ -8,23 +8,18 @@ type CountryMobileImageSwiperProps = {
   alt: string;
   onImageLoad: () => void;
   onImageError: () => void;
-  syncIndex?: number;
 };
 
 const TWEEN_FACTOR = 0.4;
-const RESUME_SYNC_DELAY_MS = 4000;
 
 export function CountryMobileImageSwiper({
   images,
   alt,
   onImageLoad,
   onImageError,
-  syncIndex,
 }: CountryMobileImageSwiperProps) {
   const [loadedIndices, setLoadedIndices] = useState<Record<number, boolean>>({});
-  const [isUserInteracting, setIsUserInteracting] = useState(false);
   const [scales, setScales] = useState<number[]>([]);
-  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
@@ -37,6 +32,50 @@ export function CountryMobileImageSwiper({
   useEffect(() => {
     setLoadedIndices({});
   }, [images]);
+
+  useEffect(() => {
+    if (images.length === 0) return;
+
+    let cancelled = false;
+    const preloaders: HTMLImageElement[] = [];
+
+    images.forEach((src, index) => {
+      const preloader = new Image();
+      preloaders.push(preloader);
+      let handled = false;
+
+      const markReady = (isError: boolean) => {
+        if (handled || cancelled) return;
+        handled = true;
+        if (cancelled) return;
+        setLoadedIndices((current) => {
+          if (current[index]) return current;
+          return { ...current, [index]: true };
+        });
+        if (isError) {
+          onImageError();
+        } else {
+          onImageLoad();
+        }
+      };
+
+      preloader.onload = () => markReady(false);
+      preloader.onerror = () => markReady(true);
+      preloader.src = src;
+
+      if (preloader.complete) {
+        markReady(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      preloaders.forEach((preloader) => {
+        preloader.onload = null;
+        preloader.onerror = null;
+      });
+    };
+  }, [images, onImageError, onImageLoad]);
 
   const applyScale = useCallback((api: NonNullable<typeof emblaApi>) => {
     const scrollSnaps = api.scrollSnapList();
@@ -64,44 +103,25 @@ export function CountryMobileImageSwiper({
 
   useEffect(() => {
     if (!emblaApi) return;
+    emblaApi.reInit();
+    applyScale(emblaApi);
+  }, [emblaApi, images, applyScale]);
 
-    const handlePointerDown = () => {
-      if (resumeTimeoutRef.current) {
-        clearTimeout(resumeTimeoutRef.current);
-        resumeTimeoutRef.current = null;
-      }
-      setIsUserInteracting(true);
-    };
-
-    const handleSettle = () => {
-      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-      resumeTimeoutRef.current = setTimeout(() => {
-        setIsUserInteracting(false);
-      }, RESUME_SYNC_DELAY_MS);
-    };
+  useEffect(() => {
+    if (!emblaApi) return;
 
     const handleUpdate = () => applyScale(emblaApi);
 
     applyScale(emblaApi);
 
-    emblaApi.on("pointerDown", handlePointerDown);
-    emblaApi.on("settle", handleSettle);
     emblaApi.on("scroll", handleUpdate);
     emblaApi.on("reInit", handleUpdate);
 
     return () => {
-      emblaApi.off("pointerDown", handlePointerDown);
-      emblaApi.off("settle", handleSettle);
       emblaApi.off("scroll", handleUpdate);
       emblaApi.off("reInit", handleUpdate);
-      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
     };
   }, [emblaApi, applyScale]);
-
-  useEffect(() => {
-    if (!emblaApi || typeof syncIndex !== "number" || isUserInteracting) return;
-    emblaApi.scrollTo(syncIndex);
-  }, [emblaApi, syncIndex, isUserInteracting]);
 
   const markLoaded = useCallback(
     (index: number) => {
@@ -127,44 +147,49 @@ export function CountryMobileImageSwiper({
 
   const hasImages = images.length > 0;
 
+  if (!hasImages) {
+    return (
+      <div className="relative mx-auto flex h-full w-full flex-col items-center justify-center">
+        <div className="aspect-[16/9] w-[92%] max-w-md animate-pulse rounded-sm bg-gray-100" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative mx-auto flex h-full w-full flex-col items-center justify-center">
-      {hasImages && (
-        <div className="w-full max-w-md overflow-visible" ref={emblaRef}>
-          <div className="flex touch-pan-y">
-            {images.map((src, index) => {
-              const isCurrentLoaded = loadedIndices[index];
-              const scale = scales[index] ?? 0.82;
+      <div className="w-full max-w-md overflow-visible" ref={emblaRef}>
+        <div className="flex touch-pan-y">
+          {images.map((src, index) => {
+            const isCurrentLoaded = loadedIndices[index];
+            const scale = scales[index] ?? 0.82;
 
-              return (
+            return (
+              <div
+                key={src + index}
+                className="relative min-w-0 shrink-0 basis-[92%]"
+                style={{ zIndex: Math.round(scale * 100) }}
+              >
                 <div
-                  key={src + index}
-                  className="relative min-w-0 shrink-0 basis-[92%]"
-                  style={{ zIndex: Math.round(scale * 100) }}
+                  className="relative aspect-[16/9] w-full origin-center overflow-hidden rounded-sm bg-white shadow-xl"
+                  style={{ transform: `scale(${scale})` }}
                 >
-                  <div
-                    className="relative aspect-[16/9] w-full origin-center overflow-hidden rounded-sm bg-white shadow-xl"
-                    style={{ transform: `scale(${scale})` }}
-                  >
-                    {!isCurrentLoaded && (
-                      <div className="absolute inset-0 rounded-sm bg-gray-100 animate-pulse" />
-                    )}
-                    <img
-                      src={src}
-                      alt={alt}
-                      draggable={false}
-                      onLoad={() => markLoaded(index)}
-                      onError={() => markError(index)}
-                      className={`h-full w-full object-cover transition-opacity duration-300 ${isCurrentLoaded ? "opacity-100" : "opacity-0"
-                        }`}
-                    />
-                  </div>
+                  {!isCurrentLoaded && (
+                    <div className="absolute inset-0 rounded-sm bg-gray-100 animate-pulse" />
+                  )}
+                  <img
+                    src={src}
+                    alt={alt}
+                    draggable={false}
+                    onLoad={() => markLoaded(index)}
+                    onError={() => markError(index)}
+                    className="h-full w-full object-cover"
+                  />
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }

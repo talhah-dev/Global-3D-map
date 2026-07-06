@@ -101,6 +101,7 @@ function DestinationCard({
   width,
   height,
   scale,
+  opacity,
 }: {
   name: string;
   image: string | undefined;
@@ -109,15 +110,17 @@ function DestinationCard({
   width: number;
   height: number;
   scale: number;
+  opacity: number;
 }) {
   return (
     <div
-      className="absolute overflow-hidden rounded-sm shadow-xl"
+      className="absolute overflow-hidden rounded-sm shadow-xl transition-transform duration-150 ease-out"
       style={{
         left: x,
         top: y,
         width,
-        height,
+        height: Math.round(width * 0.5625),
+        opacity,
         transform: `translate(-50%, -50%) scale(${scale})`,
       }}
     >
@@ -140,6 +143,7 @@ export default function Home() {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [rotationDeg, setRotationDeg] = useState(0);
   const [destinationImages, setDestinationImages] = useState<Record<string, string>>({});
+  const [mounted, setMounted] = useState(false);
   const prevAngleRef = useRef(0);
 
   useEffect(() => {
@@ -149,6 +153,10 @@ export default function Home() {
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
     return () => window.removeEventListener("resize", updateDimensions);
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -248,32 +256,34 @@ export default function Home() {
     const depth = Math.cos(angleRad);
     const x = centerX + horizontalRadius * Math.sin(angleRad);
     const y = centerY + destination.verticalOffset;
-    const scale = 0.88 + 0.12 * ((depth + 1) / 2);
-    return { destination, x, y, depth, scale };
+    const normalizedDepth = (depth + 1) / 2;
+    const scale = 0.35 + normalizedDepth * 0.65;
+    const opacity = 0.12 + normalizedDepth * 0.88;
+    return { destination, x, y, depth, scale, opacity };
   });
 
   const frontCards = positioned.filter((item) => item.depth > 0);
   const backCards = positioned.filter((item) => item.depth <= 0);
 
-  const mobileIndex =
-    ((Math.round(rotationDeg / 60) % DESTINATIONS.length) + DESTINATIONS.length) % DESTINATIONS.length;
-
   return (
     <div className="relative w-screen h-screen bg-white overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 z-0 hidden md:block">
-        {backCards.map((item) => (
-          <DestinationCard
-            key={item.destination.name}
-            name={item.destination.name}
-            image={destinationImages[item.destination.name]}
-            x={item.x}
-            y={item.y}
-            width={item.destination.width}
-            height={item.destination.height}
-            scale={item.scale}
-          />
-        ))}
-      </div>
+      {mounted && (
+        <div className="pointer-events-none absolute inset-0 z-0 hidden md:block">
+          {backCards.map((item) => (
+            <DestinationCard
+              key={item.destination.name}
+              name={item.destination.name}
+              image={destinationImages[item.destination.name]}
+              x={item.x}
+              y={item.y}
+              width={item.destination.width}
+              height={item.destination.height}
+              scale={item.scale}
+              opacity={item.opacity}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="relative z-10 h-full w-full">
         <Globe
@@ -288,32 +298,36 @@ export default function Home() {
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-20 hidden md:block">
-        {frontCards.map((item) => (
-          <DestinationCard
-            key={item.destination.name}
-            name={item.destination.name}
-            image={destinationImages[item.destination.name]}
-            x={item.x}
-            y={item.y}
-            width={item.destination.width}
-            height={item.destination.height}
-            scale={item.scale}
-          />
-        ))}
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
-        <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
-          <CountryMobileImageSwiper
-            images={DESTINATIONS.map((destination) => destinationImages[destination.name]).filter(Boolean) as string[]}
-            alt="Featured destination"
-            onImageLoad={() => { }}
-            onImageError={() => { }}
-            syncIndex={mobileIndex}
-          />
+      {mounted && (
+        <div className="pointer-events-none absolute inset-0 z-20 hidden md:block">
+          {frontCards.map((item) => (
+            <DestinationCard
+              key={item.destination.name}
+              name={item.destination.name}
+              image={destinationImages[item.destination.name]}
+              x={item.x}
+              y={item.y}
+              width={item.destination.width}
+              height={item.destination.height}
+              scale={item.scale}
+              opacity={item.opacity}
+            />
+          ))}
         </div>
-      </div>
+      )}
+
+      {mounted && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
+          <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
+            <CountryMobileImageSwiper
+              images={DESTINATIONS.map((destination) => destinationImages[destination.name]).filter(Boolean) as string[]}
+              alt="Featured destination"
+              onImageLoad={() => { }}
+              onImageError={() => { }}
+            />
+          </div>
+        </div>
+      )}
 
 
     </div>
