@@ -303,6 +303,8 @@ export default function Home() {
         ))}
       </div>
 
+      // .
+
       <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center md:hidden">
         <div className="pointer-events-auto w-full max-w-sm px-4">
           <CountryMobileImageSwiper
