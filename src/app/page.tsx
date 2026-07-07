@@ -22,17 +22,18 @@ type OrbitDestination = {
   name: string;
   baseAngle: number;
   verticalOffset: number;
-  width: number;
-  height: number;
 };
 
+const CARD_WIDTH = 320;
+const CARD_HEIGHT = 190;
+
 const DESTINATIONS: OrbitDestination[] = [
-  { name: "Bahamas", baseAngle: 0, verticalOffset: -30, width: 460, height: 250 },
-  { name: "Mexico", baseAngle: -55, verticalOffset: -190, width: 250, height: 160 },
-  { name: "Costa Rica", baseAngle: -100, verticalOffset: 10, width: 230, height: 150 },
-  { name: "Puerto Rico", baseAngle: -75, verticalOffset: 150, width: 250, height: 160 },
-  { name: "Caribbean", baseAngle: -20, verticalOffset: 230, width: 220, height: 170 },
-  { name: "Europe", baseAngle: 65, verticalOffset: -10, width: 220, height: 250 },
+  { name: "Bahamas", baseAngle: 0, verticalOffset: -30 },
+  { name: "Mexico", baseAngle: -55, verticalOffset: -190 },
+  { name: "Costa Rica", baseAngle: -100, verticalOffset: 10 },
+  { name: "Puerto Rico", baseAngle: -75, verticalOffset: 150 },
+  { name: "Caribbean", baseAngle: -20, verticalOffset: 230 },
+  { name: "Europe", baseAngle: 65, verticalOffset: -10 },
 ];
 
 const TEXTURE_CACHE_KEY = "dotted-globe-texture-v5";
@@ -102,8 +103,6 @@ function DestinationCard({
   image,
   x,
   y,
-  width,
-  height,
   scale,
   opacity,
 }: {
@@ -111,8 +110,6 @@ function DestinationCard({
   image: string | undefined;
   x: number;
   y: number;
-  width: number;
-  height: number;
   scale: number;
   opacity: number;
 }) {
@@ -122,8 +119,8 @@ function DestinationCard({
       style={{
         left: x,
         top: y,
-        width,
-        height,
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
         opacity,
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition: "transform 80ms linear, opacity 80ms linear",
@@ -194,10 +191,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!globeRef.current || countries.features.length === 0) return;
-    globeRef.current.controls().autoRotate = true;
-    globeRef.current.controls().autoRotateSpeed = 0.6;
-    globeRef.current.controls().enableZoom = false;
-    globeRef.current.controls().enablePan = false;
+    const controls = globeRef.current.controls();
+    controls.autoRotate = false;
+    controls.enableZoom = false;
+    controls.enablePan = false;
   }, [countries]);
 
   useEffect(() => {
@@ -266,8 +263,8 @@ export default function Home() {
     const x = centerX + horizontalRadius * Math.sin(angleRad);
     const y = centerY + destination.verticalOffset;
     const normalizedDepth = (depth + 1) / 2;
-    const scale = 0.35 + normalizedDepth * 0.65;
-    const opacity = 0.12 + normalizedDepth * 0.88;
+    const scale = 0.3 + normalizedDepth * 0.85;
+    const opacity = 0.1 + normalizedDepth * 0.9;
     return { destination, x, y, depth, scale, opacity };
   });
 
@@ -289,8 +286,6 @@ export default function Home() {
               image={destinationImages[item.destination.name]}
               x={item.x}
               y={item.y}
-              width={item.destination.width}
-              height={item.destination.height}
               scale={item.scale}
               opacity={item.opacity}
             />
@@ -319,8 +314,6 @@ export default function Home() {
               image={destinationImages[item.destination.name]}
               x={item.x}
               y={item.y}
-              width={item.destination.width}
-              height={item.destination.height}
               scale={item.scale}
               opacity={item.opacity}
             />
