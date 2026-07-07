@@ -132,7 +132,7 @@ function DestinationCard({
         <div className="h-full w-full bg-gradient-to-br from-teal-100 via-slate-100 to-slate-200" />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
-      <p className="absolute bottom-3 left-4 text-lg font-light text-white">{name}</p>
+      <p className="font-gyst absolute bottom-3 left-4 text-lg font-light text-white">{name}</p>
     </div>
   );
 }
@@ -144,9 +144,16 @@ export default function Home() {
   const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [rotationDeg, setRotationDeg] = useState(0);
-  const [destinationImages, setDestinationImages] = useState<Record<string, string>>({});
   const [mounted, setMounted] = useState(false);
   const prevAngleRef = useRef(0);
+  const destinationImages: Record<string, string> = {
+    Bahamas: "/bahamas.png",
+    Mexico: "/mexico.png",
+    "Costa Rica": "/costa-rica.png",
+    "Puerto Rico": "/puerto-rico.png",
+    Caribbean: "/caribbean.png",
+    Europe: "/europe.png",
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -215,42 +222,6 @@ export default function Home() {
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadImages() {
-      const key = process.env.NEXT_PUBLIC_PEXELS_ACCESS_KEY;
-      if (!key) return;
-
-      const results = await Promise.allSettled(
-        DESTINATIONS.map((d) =>
-          fetch(
-            `https://api.pexels.com/v1/search?query=${encodeURIComponent(d.name + " travel landscape")}&per_page=1&orientation=landscape`,
-            { headers: { Authorization: key } }
-          ).then((r) => r.json())
-        )
-      );
-
-      if (cancelled) return;
-
-      const next: Record<string, string> = {};
-      results.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          const photo = result.value?.photos?.[0];
-          const url = photo?.src?.large2x || photo?.src?.large || photo?.src?.medium;
-          if (url) next[DESTINATIONS[index].name] = url;
-        }
-      });
-
-      setDestinationImages(next);
-    }
-
-    loadImages();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const centerX = dimensions.width / 2;

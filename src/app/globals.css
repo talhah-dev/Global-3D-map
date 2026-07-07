@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Gyst";
+  src: url("/fonts/fonnts.com-Gyst_Variable_Light.otf") format("opentype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gyst";
+  src: url("/fonts/fonnts.com-Gyst_Variable_Light_Italic.otf") format("opentype");
+  font-weight: 300 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -16,4 +32,10 @@ body {
   background: #ffffff;
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+@layer utilities {
+  .font-gyst {
+    font-family: "Gyst", "Segoe UI", Arial, sans-serif;
+  }
 }
