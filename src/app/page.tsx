@@ -27,13 +27,15 @@ type OrbitDestination = {
 };
 
 const DESTINATIONS: OrbitDestination[] = [
-  { name: "Bahamas", baseAngle: 0, verticalOffset: -50, width: 460, height: 250 },
-  { name: "Mexico", baseAngle: 300, verticalOffset: -230, width: 260, height: 170 },
-  { name: "Costa Rica", baseAngle: 250, verticalOffset: -20, width: 240, height: 160 },
-  { name: "Puerto Rico", baseAngle: 220, verticalOffset: 130, width: 260, height: 170 },
-  { name: "Caribbean", baseAngle: 150, verticalOffset: 220, width: 230, height: 180 },
-  { name: "Europe", baseAngle: 60, verticalOffset: -40, width: 220, height: 260 },
+  { name: "Bahamas", baseAngle: 0, verticalOffset: -30, width: 460, height: 250 },
+  { name: "Mexico", baseAngle: -55, verticalOffset: -190, width: 250, height: 160 },
+  { name: "Costa Rica", baseAngle: -100, verticalOffset: 10, width: 230, height: 150 },
+  { name: "Puerto Rico", baseAngle: -75, verticalOffset: 150, width: 250, height: 160 },
+  { name: "Caribbean", baseAngle: -20, verticalOffset: 230, width: 220, height: 170 },
+  { name: "Europe", baseAngle: 65, verticalOffset: -10, width: 220, height: 250 },
 ];
+
+const TEXTURE_CACHE_KEY = "dotted-globe-texture-v5";
 
 function isPointInRing(lng: number, lat: number, ring: number[][]) {
   let inside = false;
@@ -63,10 +65,12 @@ function isPointInFeature(lng: number, lat: number, feature: CountryFeature) {
   return false;
 }
 
-function buildDottedGlobeTexture(features: CountryFeature[]) {
-  const width = 480;
-  const height = 240;
+function buildDottedGlobeTexture(features: CountryFeature[]): string {
+  const width = 1536;
+  const height = 768;
   const step = 3;
+  const dotRadius = 0.8;
+
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -75,22 +79,22 @@ function buildDottedGlobeTexture(features: CountryFeature[]) {
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#4cd6d4";
+  ctx.fillStyle = "#4cc9c4";
 
-  for (let y = 0; y < height; y += step) {
+  for (let y = step / 2; y < height; y += step) {
     const lat = 90 - (y / height) * 180;
-    for (let x = 0; x < width; x += step) {
+    for (let x = step / 2; x < width; x += step) {
       const lng = (x / width) * 360 - 180;
-      const isLand = features.some((feature) => isPointInFeature(lng, lat, feature));
+      const isLand = features.some((f) => isPointInFeature(lng, lat, f));
       if (isLand) {
         ctx.beginPath();
-        ctx.arc(x, y, 0.85, 0, Math.PI * 2);
+        ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  return canvas.toDataURL();
+  return canvas.toDataURL("image/png");
 }
 
 function DestinationCard({
@@ -114,20 +118,21 @@ function DestinationCard({
 }) {
   return (
     <div
-      className="absolute overflow-hidden rounded-sm shadow-xl transition-transform duration-150 ease-out"
+      className="absolute overflow-hidden rounded-sm shadow-xl"
       style={{
         left: x,
         top: y,
         width,
-        height: Math.round(width * 0.5625),
+        height,
         opacity,
         transform: `translate(-50%, -50%) scale(${scale})`,
+        transition: "transform 80ms linear, opacity 80ms linear",
       }}
     >
       {image ? (
         <img src={image} alt={name} className="h-full w-full object-cover" />
       ) : (
-        <div className="h-full w-full bg-gradient-to-br from-teal-200 via-slate-200 to-slate-300" />
+        <div className="h-full w-full bg-gradient-to-br from-teal-100 via-slate-100 to-slate-200" />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
       <p className="absolute bottom-3 left-4 text-lg font-light text-white">{name}</p>
@@ -138,7 +143,7 @@ function DestinationCard({
 export default function Home() {
   const globeRef = useRef<any>(null);
   const [countries, setCountries] = useState<{ features: CountryFeature[] }>({ features: [] });
-  const [globeTexture, setGlobeTexture] = useState("");
+  const [globeTexture, setGlobeTexture] = useState<string>("");
   const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [rotationDeg, setRotationDeg] = useState(0);
@@ -147,16 +152,11 @@ export default function Home() {
   const prevAngleRef = useRef(0);
 
   useEffect(() => {
-    const updateDimensions = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
-    updateDimensions();
-    window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
-  }, []);
-
-  useEffect(() => {
     setMounted(true);
+    const update = () => setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   useEffect(() => {
@@ -168,7 +168,7 @@ export default function Home() {
   useEffect(() => {
     if (countries.features.length === 0) return;
 
-    const cached = window.localStorage.getItem("dotted-globe-texture-v2");
+    const cached = window.localStorage.getItem(TEXTURE_CACHE_KEY);
     if (cached) {
       setGlobeTexture(cached);
       return;
@@ -176,14 +176,29 @@ export default function Home() {
 
     const texture = buildDottedGlobeTexture(countries.features);
     setGlobeTexture(texture);
-    window.localStorage.setItem("dotted-globe-texture-v2", texture);
+    try {
+      window.localStorage.setItem(TEXTURE_CACHE_KEY, texture);
+    } catch (_) { }
   }, [countries]);
 
   useEffect(() => {
+    if (!globeTexture) return;
+
     import("three").then((THREE) => {
-      setGlobeMaterial(new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffffff") }));
+      const loader = new THREE.TextureLoader();
+      loader.load(globeTexture, (texture) => {
+        setGlobeMaterial(new THREE.MeshBasicMaterial({ map: texture }));
+      });
     });
-  }, []);
+  }, [globeTexture]);
+
+  useEffect(() => {
+    if (!globeRef.current || countries.features.length === 0) return;
+    globeRef.current.controls().autoRotate = true;
+    globeRef.current.controls().autoRotateSpeed = 0.6;
+    globeRef.current.controls().enableZoom = false;
+    globeRef.current.controls().enablePan = false;
+  }, [countries]);
 
   useEffect(() => {
     let frameId: number;
@@ -196,7 +211,7 @@ export default function Home() {
         if (delta > Math.PI) delta -= Math.PI * 2;
         if (delta < -Math.PI) delta += Math.PI * 2;
         prevAngleRef.current = angle;
-        setRotationDeg((value) => value + delta * (180 / Math.PI));
+        setRotationDeg((prev) => prev - delta * (180 / Math.PI));
       }
       frameId = requestAnimationFrame(tick);
     };
@@ -213,10 +228,11 @@ export default function Home() {
       if (!key) return;
 
       const results = await Promise.allSettled(
-        DESTINATIONS.map((destination) =>
-          fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(destination.name)}&per_page=1`, {
-            headers: { Authorization: key },
-          }).then((res) => res.json())
+        DESTINATIONS.map((d) =>
+          fetch(
+            `https://api.pexels.com/v1/search?query=${encodeURIComponent(d.name + " travel landscape")}&per_page=1&orientation=landscape`,
+            { headers: { Authorization: key } }
+          ).then((r) => r.json())
         )
       );
 
@@ -226,7 +242,7 @@ export default function Home() {
       results.forEach((result, index) => {
         if (result.status === "fulfilled") {
           const photo = result.value?.photos?.[0];
-          const url = photo?.src?.large || photo?.src?.medium;
+          const url = photo?.src?.large2x || photo?.src?.large || photo?.src?.medium;
           if (url) next[DESTINATIONS[index].name] = url;
         }
       });
@@ -255,8 +271,12 @@ export default function Home() {
     return { destination, x, y, depth, scale, opacity };
   });
 
-  const frontCards = positioned.filter((item) => item.depth > 0);
   const backCards = positioned.filter((item) => item.depth <= 0);
+  const frontCards = positioned.filter((item) => item.depth > 0);
+
+  const mobileIndex =
+    ((Math.round(rotationDeg / 60) % DESTINATIONS.length) + DESTINATIONS.length) %
+    DESTINATIONS.length;
 
   return (
     <div className="relative w-screen h-screen bg-white overflow-hidden">
@@ -284,7 +304,6 @@ export default function Home() {
           width={dimensions.width}
           height={dimensions.height}
           backgroundColor="rgba(0,0,0,0)"
-          globeImageUrl={globeTexture || undefined}
           globeMaterial={globeMaterial}
           showAtmosphere={false}
           showGraticules={false}
@@ -313,16 +332,17 @@ export default function Home() {
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
           <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
             <CountryMobileImageSwiper
-              images={DESTINATIONS.map((destination) => destinationImages[destination.name]).filter(Boolean) as string[]}
+              images={
+                DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
+              }
               alt="Featured destination"
               onImageLoad={() => { }}
               onImageError={() => { }}
+              syncIndex={mobileIndex}
             />
           </div>
         </div>
       )}
-
-
     </div>
   );
 }
