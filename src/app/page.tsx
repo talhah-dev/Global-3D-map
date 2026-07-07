@@ -271,10 +271,6 @@ export default function Home() {
   const backCards = positioned.filter((item) => item.depth <= 0);
   const frontCards = positioned.filter((item) => item.depth > 0);
 
-  const mobileIndex =
-    ((Math.round(rotationDeg / 60) % DESTINATIONS.length) + DESTINATIONS.length) %
-    DESTINATIONS.length;
-
   return (
     <div className="relative w-screen h-screen bg-white overflow-hidden">
       {mounted && (
@@ -331,7 +327,6 @@ export default function Home() {
               alt="Featured destination"
               onImageLoad={() => { }}
               onImageError={() => { }}
-              syncIndex={mobileIndex}
             />
           </div>
         </div>
