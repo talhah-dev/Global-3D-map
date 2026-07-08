@@ -24,8 +24,10 @@ type OrbitDestination = {
   verticalOffset: number;
 };
 
-const CARD_WIDTH = 320;
-const CARD_HEIGHT = 190;
+const CARD_WIDTH = 230;
+const CARD_HEIGHT = 135;
+const DESKTOP_GLOBE_SCALE = 1.5;
+const DESKTOP_GLOBE_VERTICAL_PADDING = 64;
 
 const DESTINATIONS: OrbitDestination[] = [
   { name: "Bahamas", baseAngle: 0, verticalOffset: -30 },
@@ -98,6 +100,8 @@ function buildDottedGlobeTexture(features: CountryFeature[]): string {
   return canvas.toDataURL("image/png");
 }
 
+
+
 function DestinationCard({
   name,
   image,
@@ -146,6 +150,8 @@ export default function Home() {
   const [rotationDeg, setRotationDeg] = useState(0);
   const [mounted, setMounted] = useState(false);
   const prevAngleRef = useRef(0);
+  const isDesktop = dimensions.width >= 768;
+  const mobileGlobeHeight = Math.min(dimensions.height * 0.76, 620);
   const destinationImages: Record<string, string> = {
     Bahamas: "/bahamas.png",
     Mexico: "/mexico.png",
@@ -162,6 +168,29 @@ export default function Home() {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  const desktopWrapperRef = useRef<HTMLDivElement>(null);
+  const mobileWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const nodes = [desktopWrapperRef.current, mobileWrapperRef.current].filter(
+      Boolean
+    ) as HTMLDivElement[];
+
+    const blockWheel = (event: WheelEvent) => {
+      event.preventDefault();
+    };
+
+    nodes.forEach((node) => {
+      node.addEventListener("wheel", blockWheel, { passive: false });
+    });
+
+    return () => {
+      nodes.forEach((node) => {
+        node.removeEventListener("wheel", blockWheel);
+      });
+    };
+  }, [mounted, isDesktop]);
 
   useEffect(() => {
     fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson")
@@ -199,9 +228,14 @@ export default function Home() {
   useEffect(() => {
     if (!globeRef.current || countries.features.length === 0) return;
     const controls = globeRef.current.controls();
+    controls.enableRotate = true;
     controls.autoRotate = false;
     controls.enableZoom = false;
     controls.enablePan = false;
+    controls.zoomSpeed = 0;
+    const fixedDistance = globeRef.current.camera().position.length();
+    controls.minDistance = fixedDistance;
+    controls.maxDistance = fixedDistance;
   }, [countries]);
 
   useEffect(() => {
@@ -226,7 +260,7 @@ export default function Home() {
 
   const centerX = dimensions.width / 2;
   const centerY = dimensions.height / 2;
-  const horizontalRadius = Math.min(dimensions.width, dimensions.height) * 0.62;
+  const horizontalRadius = Math.min(dimensions.width, dimensions.height) * 0.4;
 
   const positioned = DESTINATIONS.map((destination) => {
     const angleRad = ((destination.baseAngle + rotationDeg) * Math.PI) / 180;
@@ -243,58 +277,94 @@ export default function Home() {
   const frontCards = positioned.filter((item) => item.depth > 0);
 
   return (
-    <div className="relative w-screen h-screen bg-white overflow-hidden">
-      {mounted && (
-        <div className="pointer-events-none absolute inset-0 z-0 hidden md:block">
-          {backCards.map((item) => (
-            <DestinationCard
-              key={item.destination.name}
-              name={item.destination.name}
-              image={destinationImages[item.destination.name]}
-              x={item.x}
-              y={item.y}
-              scale={item.scale}
-              opacity={item.opacity}
+    <div className="relative w-screen min-h-screen bg-white overflow-x-hidden overflow-y-auto">
+      {mounted && isDesktop && (
+        <div
+          className="pointer-events-none relative hidden origin-center md:block w-full"
+          style={{
+            transform: `scale(${DESKTOP_GLOBE_SCALE})`,
+            transformOrigin: "center center",
+            height: `calc(100vh + ${DESKTOP_GLOBE_VERTICAL_PADDING * 2}px)`,
+            paddingTop: DESKTOP_GLOBE_VERTICAL_PADDING,
+            paddingBottom: DESKTOP_GLOBE_VERTICAL_PADDING,
+            boxSizing: "border-box",
+          }}
+        >
+          <div className="pointer-events-none absolute inset-0 z-0">
+            {backCards.map((item) => (
+              <DestinationCard
+                key={item.destination.name}
+                name={item.destination.name}
+                image={destinationImages[item.destination.name]}
+                x={item.x}
+                y={item.y}
+                scale={item.scale}
+                opacity={item.opacity}
+              />
+            ))}
+          </div>
+
+          <div
+            className="relative z-10 h-full w-full pointer-events-auto"
+            onWheelCapture={(event) => event.preventDefault()}
+            ref={desktopWrapperRef}
+          >
+            <Globe
+              ref={globeRef}
+              width={dimensions.width}
+              height={dimensions.height}
+              backgroundColor="rgba(0,0,0,0)"
+              globeMaterial={globeMaterial}
+              showAtmosphere={false}
+              showGraticules={false}
             />
-          ))}
+          </div>
+
+          <div className="pointer-events-none absolute inset-0 z-20">
+            {frontCards.map((item) => (
+              <DestinationCard
+                key={item.destination.name}
+                name={item.destination.name}
+                image={destinationImages[item.destination.name]}
+                x={item.x}
+                y={item.y}
+                scale={item.scale}
+                opacity={item.opacity}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      <div className="relative z-10 h-full w-full">
-        <Globe
-          ref={globeRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          backgroundColor="rgba(0,0,0,0)"
-          globeMaterial={globeMaterial}
-          showAtmosphere={false}
-          showGraticules={false}
-        />
-      </div>
-
-      {mounted && (
-        <div className="pointer-events-none absolute inset-0 z-20 hidden md:block">
-          {frontCards.map((item) => (
-            <DestinationCard
-              key={item.destination.name}
-              name={item.destination.name}
-              image={destinationImages[item.destination.name]}
-              x={item.x}
-              y={item.y}
-              scale={item.scale}
-              opacity={item.opacity}
+      {mounted && !isDesktop && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center md:hidden">
+          <div
+            className="pointer-events-auto relative w-full"
+            style={{ height: mobileGlobeHeight }}
+            ref={mobileWrapperRef}
+            onWheelCapture={(event) => event.preventDefault()}
+          >
+            <Globe
+              ref={globeRef}
+              width={dimensions.width}
+              height={mobileGlobeHeight}
+              backgroundColor="rgba(0,0,0,0)"
+              globeMaterial={globeMaterial}
+              showAtmosphere={false}
+              showGraticules={false}
             />
-          ))}
+          </div>
         </div>
       )}
 
-      {mounted && (
+      {mounted && !isDesktop && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
           <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
             <CountryMobileImageSwiper
               images={
                 DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
               }
+              labels={DESTINATIONS.map((d) => d.name)}
               alt="Featured destination"
               onImageLoad={() => { }}
               onImageError={() => { }}

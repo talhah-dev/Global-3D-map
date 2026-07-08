@@ -5,6 +5,7 @@ import useEmblaCarousel from "embla-carousel-react";
 
 type CountryMobileImageSwiperProps = {
   images: string[];
+  labels?: string[];
   alt: string;
   onImageLoad: () => void;
   onImageError: () => void;
@@ -14,6 +15,7 @@ const TWEEN_FACTOR = 0.4;
 
 export function CountryMobileImageSwiper({
   images,
+  labels,
   alt,
   onImageLoad,
   onImageError,
@@ -184,6 +186,14 @@ export function CountryMobileImageSwiper({
                     onError={() => markError(index)}
                     className="h-full w-full object-cover"
                   />
+                  {labels?.[index] && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+                  )}
+                  {labels?.[index] && (
+                    <p className="font-gyst absolute bottom-3 left-4 text-lg font-light text-white">
+                      {labels[index]}
+                    </p>
+                  )}
                 </div>
               </div>
             );
