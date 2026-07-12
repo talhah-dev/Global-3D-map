@@ -28,6 +28,7 @@ const CARD_WIDTH = 230;
 const CARD_HEIGHT = 135;
 const DESKTOP_GLOBE_SCALE = 1.5;
 const DESKTOP_GLOBE_VERTICAL_PADDING = 64;
+const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
 
 const DESTINATIONS: OrbitDestination[] = [
   { name: "Bahamas", baseAngle: 0, verticalOffset: -30 },
@@ -229,10 +230,13 @@ export default function Home() {
     if (!globeRef.current || countries.features.length === 0) return;
     const controls = globeRef.current.controls();
     controls.enableRotate = true;
+    controls.enableDamping = true;
     controls.autoRotate = false;
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.zoomSpeed = 0;
+    controls.rotateSpeed = 1 - DESKTOP_GLOBE_SMOOTHNESS * 4;
+    controls.dampingFactor = DESKTOP_GLOBE_SMOOTHNESS;
     const fixedDistance = globeRef.current.camera().position.length();
     controls.minDistance = fixedDistance;
     controls.maxDistance = fixedDistance;
