@@ -20,8 +20,8 @@ interface CountryFeature {
 
 type OrbitDestination = {
   name: string;
-  baseAngle: number;
-  verticalOffset: number;
+  lat: number;
+  lng: number;
 };
 
 const CARD_WIDTH = 230;
@@ -31,12 +31,13 @@ const DESKTOP_GLOBE_VERTICAL_PADDING = 64;
 const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
 
 const DESTINATIONS: OrbitDestination[] = [
-  { name: "Bahamas", baseAngle: 0, verticalOffset: -30 },
-  { name: "Mexico", baseAngle: -55, verticalOffset: -190 },
-  { name: "Costa Rica", baseAngle: -100, verticalOffset: 10 },
-  { name: "Puerto Rico", baseAngle: -75, verticalOffset: 150 },
-  { name: "Caribbean", baseAngle: -20, verticalOffset: 230 },
-  { name: "Europe", baseAngle: 65, verticalOffset: -10 },
+  { name: "Bahamas", lat: 25.0343, lng: -77.3963 },
+  { name: "Mexico", lat: 23.6345, lng: -102.5528 },
+  { name: "Costa Rica", lat: 9.7489, lng: -83.7534 },
+  { name: "Puerto Rico", lat: 18.2208, lng: -66.5901 },
+  { name: "Caribbean", lat: 18.0, lng: -75.0 },
+  { name: "Barbuda", lat: 17.6186, lng: -61.7964 },
+  { name: "Europe", lat: 54.526, lng: 15.2551 },
 ];
 
 const TEXTURE_CACHE_KEY = "dotted-globe-texture-v5";
@@ -159,6 +160,7 @@ export default function Home() {
     "Costa Rica": "/costa-rica.png",
     "Puerto Rico": "/puerto-rico.png",
     Caribbean: "/caribbean.png",
+    Barbuda: "/caribbean.png",
     Europe: "/europe.png",
   };
 
@@ -262,23 +264,56 @@ export default function Home() {
     return () => cancelAnimationFrame(frameId);
   }, []);
 
-  const centerX = dimensions.width / 2;
-  const centerY = dimensions.height / 2;
-  const horizontalRadius = Math.min(dimensions.width, dimensions.height) * 0.4;
+  const rawPositioned = DESTINATIONS.map((destination) => {
+    const screenCoords = globeRef.current?.getScreenCoords(destination.lat, destination.lng, 0.18);
+    const globeCoords = globeRef.current?.getCoords(destination.lat, destination.lng, 0.18);
+    const x = screenCoords?.x ?? dimensions.width / 2;
+    const y = screenCoords?.y ?? dimensions.height / 2;
 
-  const positioned = DESTINATIONS.map((destination) => {
-    const angleRad = ((destination.baseAngle + rotationDeg) * Math.PI) / 180;
-    const depth = Math.cos(angleRad);
-    const x = centerX + horizontalRadius * Math.sin(angleRad);
-    const y = centerY + destination.verticalOffset;
-    const normalizedDepth = (depth + 1) / 2;
-    const scale = 0.3 + normalizedDepth * 0.85;
-    const opacity = 0.1 + normalizedDepth * 0.9;
-    return { destination, x, y, depth, scale, opacity };
+    let facingScore = 0;
+
+    if (globeRef.current?.camera()?.position && globeCoords) {
+      const cameraPosition = globeRef.current.camera().position;
+      const camLength = Math.sqrt(
+        cameraPosition.x ** 2 + cameraPosition.y ** 2 + cameraPosition.z ** 2
+      );
+      const pointLength = Math.sqrt(
+        globeCoords.x ** 2 + globeCoords.y ** 2 + globeCoords.z ** 2
+      );
+
+      if (camLength > 0 && pointLength > 0) {
+        const dot =
+          globeCoords.x * cameraPosition.x +
+          globeCoords.y * cameraPosition.y +
+          globeCoords.z * cameraPosition.z;
+
+        facingScore = dot / (camLength * pointLength);
+      }
+    }
+
+    return { destination, x, y, facingScore };
   });
 
-  const backCards = positioned.filter((item) => item.depth <= 0);
-  const frontCards = positioned.filter((item) => item.depth > 0);
+  const maxFacingScore = rawPositioned.length
+    ? Math.max(...rawPositioned.map((item) => item.facingScore))
+    : 1;
+
+  const positioned = rawPositioned.map((item) => {
+    const isFront = item.facingScore > 0;
+    const closenessToLeader =
+      maxFacingScore > -1
+        ? Math.max(0, (item.facingScore - -1) / (maxFacingScore - -1))
+        : 0;
+    const emphasis = Math.pow(closenessToLeader, 4);
+
+    const scale = 0.5 + emphasis * 1.0;
+    const opacity = 0.15 + emphasis * 0.85;
+
+    return { ...item, isFront, scale, opacity };
+  });
+
+  const backCards = positioned.filter((item) => !item.isFront);
+  const frontCards = positioned.filter((item) => item.isFront);
 
   return (
     <div className="relative w-screen min-h-screen bg-white overflow-x-hidden overflow-y-auto">
