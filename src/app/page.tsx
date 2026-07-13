@@ -126,6 +126,7 @@ function DestinationCard({
   y,
   scale,
   opacity,
+  onClick,
 }: {
   name: string;
   image: string | undefined;
@@ -133,10 +134,13 @@ function DestinationCard({
   y: number;
   scale: number;
   opacity: number;
+  onClick?: () => void;
 }) {
   return (
     <div
-      className="absolute overflow-hidden rounded-sm shadow-xl"
+      className={`pointer-events-auto absolute overflow-hidden rounded-sm shadow-xl ${
+        onClick ? "cursor-pointer" : ""
+      }`}
       style={{
         left: x,
         top: y,
@@ -146,6 +150,7 @@ function DestinationCard({
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition: "transform 80ms linear, opacity 80ms linear",
       }}
+      onClick={onClick}
     >
       {image ? (
         <img src={image} alt={name} className="h-full w-full object-cover" />
@@ -175,7 +180,7 @@ export default function Home() {
     "Costa Rica": "/costa-rica.png",
     "Puerto Rico": "/puerto-rico.png",
     Caribbean: "/caribbean.png",
-    Barbuda: "/barbuda.jpg",
+    Barbuda: "/barbuda1.jpeg",
     Europe: "/europe.png",
   };
 
@@ -189,6 +194,23 @@ export default function Home() {
 
   const desktopWrapperRef = useRef<HTMLDivElement>(null);
   const mobileWrapperRef = useRef<HTMLDivElement>(null);
+  const rotateToDestination = (name: string) => {
+    const destination = DESTINATIONS.find((item) => item.name === name);
+    if (!destination || !globeRef.current) return;
+
+    globeRef.current.pointOfView(
+      { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
+      1200
+    );
+  };
+  const rotateToGlobePoint = (coords: { lat: number; lng: number }) => {
+    if (!globeRef.current) return;
+
+    globeRef.current.pointOfView(
+      { lat: coords.lat, lng: coords.lng, altitude: 2.2 },
+      1200
+    );
+  };
 
   useEffect(() => {
     const nodes = [desktopWrapperRef.current, mobileWrapperRef.current].filter(
@@ -375,6 +397,7 @@ export default function Home() {
                 y={item.y}
                 scale={item.scale}
                 opacity={item.opacity}
+                onClick={() => rotateToDestination(item.destination.name)}
               />
             ))}
           </div>
@@ -392,6 +415,7 @@ export default function Home() {
               globeMaterial={globeMaterial}
               showAtmosphere={false}
               showGraticules={false}
+              onGlobeClick={rotateToGlobePoint}
             />
           </div>
 
@@ -405,6 +429,7 @@ export default function Home() {
                 y={item.y}
                 scale={item.scale}
                 opacity={item.opacity}
+                onClick={() => rotateToDestination(item.destination.name)}
               />
             ))}
           </div>
@@ -427,6 +452,7 @@ export default function Home() {
               globeMaterial={globeMaterial}
               showAtmosphere={false}
               showGraticules={false}
+              onGlobeClick={rotateToGlobePoint}
             />
           </div>
         </div>
