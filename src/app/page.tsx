@@ -138,9 +138,8 @@ function DestinationCard({
 }) {
   return (
     <div
-      className={`pointer-events-auto absolute overflow-hidden rounded-sm shadow-xl ${
-        onClick ? "cursor-pointer" : ""
-      }`}
+      className={`pointer-events-auto absolute overflow-hidden rounded-sm shadow-xl ${onClick ? "cursor-pointer" : ""
+        }`}
       style={{
         left: x,
         top: y,
@@ -148,7 +147,7 @@ function DestinationCard({
         height: CARD_HEIGHT,
         opacity,
         transform: `translate(-50%, -50%) scale(${scale})`,
-        transition: "transform 80ms linear, opacity 80ms linear",
+        transition: "opacity 80ms linear",
       }}
       onClick={onClick}
     >
@@ -165,12 +164,15 @@ function DestinationCard({
 
 export default function Home() {
   const globeRef = useRef<any>(null);
+  const activationStartRef = useRef<number | null>(null);
+  const [activationT, setActivationT] = useState(0);
   const [countries, setCountries] = useState<{ features: CountryFeature[] }>({ features: [] });
   const [globeTexture, setGlobeTexture] = useState<string>("");
   const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [rotationDeg, setRotationDeg] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [activeDestination, setActiveDestination] = useState<string | null>(null);
   const prevAngleRef = useRef(0);
   const isDesktop = dimensions.width >= 768;
   const mobileGlobeHeight = Math.min(dimensions.height * 0.76, 620);
@@ -198,17 +200,24 @@ export default function Home() {
     const destination = DESTINATIONS.find((item) => item.name === name);
     if (!destination || !globeRef.current) return;
 
+    setActiveDestination(name);
+    activationStartRef.current = performance.now();
+    setActivationT(0);
     globeRef.current.pointOfView(
       { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
-      1200
+      2600
     );
   };
+
   const rotateToGlobePoint = (coords: { lat: number; lng: number }) => {
     if (!globeRef.current) return;
 
+    setActiveDestination(null);
+    activationStartRef.current = null;
+    setActivationT(0);
     globeRef.current.pointOfView(
       { lat: coords.lat, lng: coords.lng, altitude: 2.2 },
-      1200
+      1800
     );
   };
 
@@ -274,8 +283,10 @@ export default function Home() {
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.zoomSpeed = 0;
-    controls.rotateSpeed = 1 - DESKTOP_GLOBE_SMOOTHNESS * 4;
-    controls.dampingFactor = DESKTOP_GLOBE_SMOOTHNESS;
+    // controls.rotateSpeed = 1 - DESKTOP_GLOBE_SMOOTHNESS * 4;
+    // controls.dampingFactor = DESKTOP_GLOBE_SMOOTHNESS;
+    controls.rotateSpeed = 0.35;
+    controls.dampingFactor = 0.05;
     const fixedDistance = globeRef.current.camera().position.length();
     controls.minDistance = fixedDistance;
     controls.maxDistance = fixedDistance;
@@ -294,6 +305,15 @@ export default function Home() {
         prevAngleRef.current = angle;
         setRotationDeg((prev) => prev - delta * (180 / Math.PI));
       }
+
+      if (activationStartRef.current !== null) {
+        const elapsed = performance.now() - activationStartRef.current;
+        const linearT = Math.min(elapsed / 1800, 1);
+        const eased = 1 - Math.pow(1 - linearT, 2);
+        setActivationT(eased);
+        if (linearT >= 1) activationStartRef.current = null;
+      }
+
       frameId = requestAnimationFrame(tick);
     };
 
@@ -336,6 +356,7 @@ export default function Home() {
     : 1;
 
   const positioned = rawPositioned.map((item) => {
+    const isActive = item.destination.name === activeDestination;
     const isFront = item.facingScore > 0;
     const closenessToLeader =
       maxFacingScore > -1
@@ -357,16 +378,23 @@ export default function Home() {
     const stackOffsetX = (stackIndex % 2 === 0 ? -1 : 1) * DESKTOP_CARD_STACK_GAP * 0.5;
     const stackOffsetY = Math.floor(stackIndex / 2) * DESKTOP_CARD_STACK_GAP * 0.7;
 
-    const scale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0;
-    const opacity = 0.15 + emphasis * 0.85;
+    const scale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0 + (isActive ? 0.1 : 0);
+    const opacity = 0.15 + emphasis * 0.85 + (isActive ? 0.1 : 0);
+
+    const nonActiveX = x + stackOffsetX + (desktopOffset?.x ?? 0);
+    const nonActiveY = y + stackOffsetY + (desktopOffset?.y ?? 0);
+    const nonActiveScale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0;
+    const nonActiveOpacity = 0.15 + emphasis * 0.85;
+
+    const t = isActive ? activationT * Math.max(0, item.facingScore) : 0;
 
     return {
       ...item,
-      x: x + stackOffsetX + (desktopOffset?.x ?? 0),
-      y: y + stackOffsetY + (desktopOffset?.y ?? 0),
+      x: nonActiveX + (item.x - nonActiveX) * t,
+      y: nonActiveY + (item.y - nonActiveY) * t,
       isFront,
-      scale,
-      opacity,
+      scale: nonActiveScale + (1.6 - nonActiveScale) * t,
+      opacity: nonActiveOpacity + (1 - nonActiveOpacity) * t,
     };
   });
 
