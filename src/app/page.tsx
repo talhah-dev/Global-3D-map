@@ -175,7 +175,7 @@ export default function Home() {
     "Costa Rica": "/costa-rica.png",
     "Puerto Rico": "/puerto-rico.png",
     Caribbean: "/caribbean.png",
-    Barbuda: "/caribbean.png",
+    Barbuda: "/barbuda.jpg",
     Europe: "/europe.png",
   };
 
