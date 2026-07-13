@@ -29,6 +29,21 @@ const CARD_HEIGHT = 135;
 const DESKTOP_GLOBE_SCALE = 1.5;
 const DESKTOP_GLOBE_VERTICAL_PADDING = 64;
 const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
+const DESKTOP_CARD_SPREAD = 220;
+const DESKTOP_CARD_STACK_GAP = 28;
+
+const DESKTOP_DESTINATION_OFFSETS: Record<
+  string,
+  { x: number; y: number; scale?: number }
+> = {
+  Bahamas: { x: 80, y: -150 },
+  Mexico: { x: -300, y: -70 },
+  "Costa Rica": { x: -120, y: 170 },
+  "Puerto Rico": { x: 250, y: -115 },
+  Caribbean: { x: 320, y: 95 },
+  Barbuda: { x: 520, y: 70 },
+  Europe: { x: 10, y: -250, scale: 0.92 },
+};
 
 const DESTINATIONS: OrbitDestination[] = [
   { name: "Bahamas", lat: 25.0343, lng: -77.3963 },
@@ -305,11 +320,32 @@ export default function Home() {
         ? Math.max(0, (item.facingScore - -1) / (maxFacingScore - -1))
         : 0;
     const emphasis = Math.pow(closenessToLeader, 4);
+    const centerX = dimensions.width / 2;
+    const centerY = dimensions.height / 2;
+    const spread = (1 - Math.max(0, item.facingScore)) * DESKTOP_CARD_SPREAD;
+    const offsetX = item.x - centerX;
+    const offsetY = item.y - centerY;
+    const offsetLength = Math.sqrt(offsetX ** 2 + offsetY ** 2) || 1;
+    const x = item.x + (offsetX / offsetLength) * spread;
+    const y = item.y + (offsetY / offsetLength) * spread * 0.65;
+    const desktopOffset = DESKTOP_DESTINATION_OFFSETS[item.destination.name];
+    const stackIndex = DESTINATIONS.findIndex(
+      (destination) => destination.name === item.destination.name
+    );
+    const stackOffsetX = (stackIndex % 2 === 0 ? -1 : 1) * DESKTOP_CARD_STACK_GAP * 0.5;
+    const stackOffsetY = Math.floor(stackIndex / 2) * DESKTOP_CARD_STACK_GAP * 0.7;
 
-    const scale = 0.5 + emphasis * 1.0;
+    const scale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0;
     const opacity = 0.15 + emphasis * 0.85;
 
-    return { ...item, isFront, scale, opacity };
+    return {
+      ...item,
+      x: x + stackOffsetX + (desktopOffset?.x ?? 0),
+      y: y + stackOffsetY + (desktopOffset?.y ?? 0),
+      isFront,
+      scale,
+      opacity,
+    };
   });
 
   const backCards = positioned.filter((item) => !item.isFront);
