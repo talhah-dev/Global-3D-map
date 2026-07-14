@@ -31,6 +31,7 @@ const DESKTOP_GLOBE_VERTICAL_PADDING = 0;
 const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
 const DESKTOP_CARD_SPREAD = 220;
 const DESKTOP_CARD_STACK_GAP = 28;
+const GLOBE_FOCUS_DURATION_MS = 2600;
 
 const DESKTOP_DESTINATION_OFFSETS: Record<
   string,
@@ -115,6 +116,10 @@ function buildDottedGlobeTexture(features: CountryFeature[]): string {
   }
 
   return canvas.toDataURL("image/png");
+}
+
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 
@@ -204,10 +209,12 @@ export default function Home() {
     if (!destination || !globeRef.current) return;
 
     activeDestinationRef.current = name;
+    activationStartRef.current = performance.now();
+    setActivationT(0);
     setActiveDestination(name);
     globeRef.current.pointOfView(
       { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
-      2600
+      GLOBE_FOCUS_DURATION_MS
     );
   };
 
@@ -217,10 +224,12 @@ export default function Home() {
   const rotateToGlobePoint = (coords: { lat: number; lng: number }) => {
     if (!globeRef.current) return;
     activeDestinationRef.current = null;
+    activationStartRef.current = null;
+    setActivationT(0);
     setActiveDestination(null);
     globeRef.current.pointOfView(
       { lat: coords.lat, lng: coords.lng, altitude: 2.2 },
-      2600
+      GLOBE_FOCUS_DURATION_MS
     );
   };
 
@@ -309,12 +318,24 @@ export default function Home() {
         setRotationDeg((prev) => prev - delta * (180 / Math.PI));
       }
 
-      const speed = 0.045;
+      const activeName = activeDestinationRef.current;
+      let activeProgress = activeName ? 1 : 0;
+
+      if (activeName && activationStartRef.current !== null) {
+        const elapsed = performance.now() - activationStartRef.current;
+        const linearT = Math.min(elapsed / GLOBE_FOCUS_DURATION_MS, 1);
+        activeProgress = easeInOutCubic(linearT);
+        setActivationT(activeProgress);
+        if (linearT >= 1) activationStartRef.current = null;
+      }
+
+      const resetSpeed = 0.08;
       let changed = false;
       DESTINATIONS.forEach((d) => {
         const current = activationProgressRef.current[d.name] ?? 0;
-        const target = d.name === activeDestinationRef.current ? 1 : 0;
-        const next = current + (target - current) * speed;
+        const target = d.name === activeName ? activeProgress : 0;
+        const next =
+          d.name === activeName ? target : current + (target - current) * resetSpeed;
         if (Math.abs(next - target) < 0.001) {
           activationProgressRef.current[d.name] = target;
         } else {
@@ -323,14 +344,6 @@ export default function Home() {
         }
       });
       if (changed) setActivationTick((n) => n + 1);
-
-      if (activationStartRef.current !== null) {
-        const elapsed = performance.now() - activationStartRef.current;
-        const linearT = Math.min(elapsed / 1800, 1);
-        const eased = 1 - Math.pow(1 - linearT, 2);
-        setActivationT(eased);
-        if (linearT >= 1) activationStartRef.current = null;
-      }
 
       frameId = requestAnimationFrame(tick);
     };
@@ -421,60 +434,62 @@ export default function Home() {
   return (
     <div className="relative w-screen min-h-screen bg-white overflow-x-hidden overflow-y-auto">
       {mounted && isDesktop && (
-        <div
-          className="pointer-events-none relative hidden origin-center md:block w-full pt-10"
-          style={{
-            transform: `scale(${DESKTOP_GLOBE_SCALE})`,
-            transformOrigin: "center center",
-            height: "100vh",
-            boxSizing: "border-box",
-          }}
-        >
-          <div className="pointer-events-none absolute inset-0 z-20">
-            {backCards.map((item) => (
-              <DestinationCard
-                key={item.destination.name}
-                name={item.destination.name}
-                image={destinationImages[item.destination.name]}
-                x={item.x}
-                y={item.y}
-                scale={item.scale}
-                opacity={item.opacity}
-                onClick={() => rotateToDestination(item.destination.name)}
-              />
-            ))}
-          </div>
-
+        <div className="hidden w-full pt-10 md:block">
           <div
-            className="relative z-10 h-full w-full pointer-events-auto"
-            onWheelCapture={(event) => event.preventDefault()}
-            ref={desktopWrapperRef}
+            className="pointer-events-none relative origin-center w-full"
+            style={{
+              transform: `scale(${DESKTOP_GLOBE_SCALE})`,
+              transformOrigin: "center center",
+              height: "100vh",
+              boxSizing: "border-box",
+            }}
           >
-            <Globe
-              ref={globeRef}
-              width={dimensions.width}
-              height={dimensions.height}
-              backgroundColor="rgba(0,0,0,0)"
-              globeMaterial={globeMaterial}
-              showAtmosphere={false}
-              showGraticules={false}
-              onGlobeClick={rotateToGlobePoint}
-            />
-          </div>
+            <div className="pointer-events-none absolute inset-0 z-20">
+              {backCards.map((item) => (
+                <DestinationCard
+                  key={item.destination.name}
+                  name={item.destination.name}
+                  image={destinationImages[item.destination.name]}
+                  x={item.x}
+                  y={item.y}
+                  scale={item.scale}
+                  opacity={item.opacity}
+                  onClick={() => rotateToDestination(item.destination.name)}
+                />
+              ))}
+            </div>
 
-          <div className="pointer-events-none absolute inset-0 z-30">
-            {frontCards.map((item) => (
-              <DestinationCard
-                key={item.destination.name}
-                name={item.destination.name}
-                image={destinationImages[item.destination.name]}
-                x={item.x}
-                y={item.y}
-                scale={item.scale}
-                opacity={item.opacity}
-                onClick={() => rotateToDestination(item.destination.name)}
+            <div
+              className="relative z-10 h-full w-full pointer-events-auto"
+              onWheelCapture={(event) => event.preventDefault()}
+              ref={desktopWrapperRef}
+            >
+              <Globe
+                ref={globeRef}
+                width={dimensions.width}
+                height={dimensions.height}
+                backgroundColor="rgba(0,0,0,0)"
+                globeMaterial={globeMaterial}
+                showAtmosphere={false}
+                showGraticules={false}
+                onGlobeClick={rotateToGlobePoint}
               />
-            ))}
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 z-30">
+              {frontCards.map((item) => (
+                <DestinationCard
+                  key={item.destination.name}
+                  name={item.destination.name}
+                  image={destinationImages[item.destination.name]}
+                  x={item.x}
+                  y={item.y}
+                  scale={item.scale}
+                  opacity={item.opacity}
+                  onClick={() => rotateToDestination(item.destination.name)}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
