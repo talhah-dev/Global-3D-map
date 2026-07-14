@@ -288,8 +288,8 @@ export default function Home() {
     controls.zoomSpeed = 0;
     // controls.rotateSpeed = 1 - DESKTOP_GLOBE_SMOOTHNESS * 4;
     // controls.dampingFactor = DESKTOP_GLOBE_SMOOTHNESS;
-    controls.rotateSpeed = 0.35;
-    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 0.12;
+    controls.dampingFactor = 0.08;
     const fixedDistance = globeRef.current.camera().position.length();
     controls.minDistance = fixedDistance;
     controls.maxDistance = fixedDistance;
