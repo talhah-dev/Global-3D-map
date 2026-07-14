@@ -27,7 +27,7 @@ type OrbitDestination = {
 const CARD_WIDTH = 230;
 const CARD_HEIGHT = 135;
 const DESKTOP_GLOBE_SCALE = 1.5;
-const DESKTOP_GLOBE_VERTICAL_PADDING = 64;
+const DESKTOP_GLOBE_VERTICAL_PADDING = 0;
 const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
 const DESKTOP_CARD_SPREAD = 220;
 const DESKTOP_CARD_STACK_GAP = 28;
@@ -173,7 +173,10 @@ export default function Home() {
   const [rotationDeg, setRotationDeg] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [activeDestination, setActiveDestination] = useState<string | null>(null);
+  const activeDestinationRef = useRef<string | null>(null);
   const prevAngleRef = useRef(0);
+  const activationProgressRef = useRef<Record<string, number>>({});
+  const [activationTick, setActivationTick] = useState(0);
   const isDesktop = dimensions.width >= 768;
   const mobileGlobeHeight = Math.min(dimensions.height * 0.76, 620);
   const destinationImages: Record<string, string> = {
@@ -200,24 +203,24 @@ export default function Home() {
     const destination = DESTINATIONS.find((item) => item.name === name);
     if (!destination || !globeRef.current) return;
 
+    activeDestinationRef.current = name;
     setActiveDestination(name);
-    activationStartRef.current = performance.now();
-    setActivationT(0);
     globeRef.current.pointOfView(
       { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
       2600
     );
   };
 
+
+
+
   const rotateToGlobePoint = (coords: { lat: number; lng: number }) => {
     if (!globeRef.current) return;
-
+    activeDestinationRef.current = null;
     setActiveDestination(null);
-    activationStartRef.current = null;
-    setActivationT(0);
     globeRef.current.pointOfView(
       { lat: coords.lat, lng: coords.lng, altitude: 2.2 },
-      1800
+      2600
     );
   };
 
@@ -306,6 +309,21 @@ export default function Home() {
         setRotationDeg((prev) => prev - delta * (180 / Math.PI));
       }
 
+      const speed = 0.045;
+      let changed = false;
+      DESTINATIONS.forEach((d) => {
+        const current = activationProgressRef.current[d.name] ?? 0;
+        const target = d.name === activeDestinationRef.current ? 1 : 0;
+        const next = current + (target - current) * speed;
+        if (Math.abs(next - target) < 0.001) {
+          activationProgressRef.current[d.name] = target;
+        } else {
+          activationProgressRef.current[d.name] = next;
+          changed = true;
+        }
+      });
+      if (changed) setActivationTick((n) => n + 1);
+
       if (activationStartRef.current !== null) {
         const elapsed = performance.now() - activationStartRef.current;
         const linearT = Math.min(elapsed / 1800, 1);
@@ -325,7 +343,8 @@ export default function Home() {
     const screenCoords = globeRef.current?.getScreenCoords(destination.lat, destination.lng, 0.18);
     const globeCoords = globeRef.current?.getCoords(destination.lat, destination.lng, 0.18);
     const x = screenCoords?.x ?? dimensions.width / 2;
-    const y = screenCoords?.y ?? dimensions.height / 2;
+    const y =
+      (screenCoords?.y ?? dimensions.height / 2) + DESKTOP_GLOBE_VERTICAL_PADDING;
 
     let facingScore = 0;
 
@@ -356,7 +375,6 @@ export default function Home() {
     : 1;
 
   const positioned = rawPositioned.map((item) => {
-    const isActive = item.destination.name === activeDestination;
     const isFront = item.facingScore > 0;
     const closenessToLeader =
       maxFacingScore > -1
@@ -378,15 +396,14 @@ export default function Home() {
     const stackOffsetX = (stackIndex % 2 === 0 ? -1 : 1) * DESKTOP_CARD_STACK_GAP * 0.5;
     const stackOffsetY = Math.floor(stackIndex / 2) * DESKTOP_CARD_STACK_GAP * 0.7;
 
-    const scale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0 + (isActive ? 0.1 : 0);
-    const opacity = 0.15 + emphasis * 0.85 + (isActive ? 0.1 : 0);
-
     const nonActiveX = x + stackOffsetX + (desktopOffset?.x ?? 0);
     const nonActiveY = y + stackOffsetY + (desktopOffset?.y ?? 0);
     const nonActiveScale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0;
     const nonActiveOpacity = 0.15 + emphasis * 0.85;
 
-    const t = isActive ? activationT * Math.max(0, item.facingScore) : 0;
+    // A selected card must finish at its actual globe coordinate. Multiplying by
+    // facingScore leaves part of the decorative offset in place and stops it off-centre.
+    const t = activationProgressRef.current[item.destination.name] ?? 0;
 
     return {
       ...item,
@@ -405,17 +422,15 @@ export default function Home() {
     <div className="relative w-screen min-h-screen bg-white overflow-x-hidden overflow-y-auto">
       {mounted && isDesktop && (
         <div
-          className="pointer-events-none relative hidden origin-center md:block w-full"
+          className="pointer-events-none relative hidden origin-center md:block w-full pt-10"
           style={{
             transform: `scale(${DESKTOP_GLOBE_SCALE})`,
             transformOrigin: "center center",
-            height: `calc(100vh + ${DESKTOP_GLOBE_VERTICAL_PADDING * 2}px)`,
-            paddingTop: DESKTOP_GLOBE_VERTICAL_PADDING,
-            paddingBottom: DESKTOP_GLOBE_VERTICAL_PADDING,
+            height: "100vh",
             boxSizing: "border-box",
           }}
         >
-          <div className="pointer-events-none absolute inset-0 z-0">
+          <div className="pointer-events-none absolute inset-0 z-20">
             {backCards.map((item) => (
               <DestinationCard
                 key={item.destination.name}
@@ -447,7 +462,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="pointer-events-none absolute inset-0 z-20">
+          <div className="pointer-events-none absolute inset-0 z-30">
             {frontCards.map((item) => (
               <DestinationCard
                 key={item.destination.name}
