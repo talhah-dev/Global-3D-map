@@ -495,14 +495,16 @@ export default function Home() {
       (item.x - centerX) ** 2 + (item.y - centerY) ** 2
     );
     const centerInfluence =
-      !focusName && item.destination.name === nearestCenteredName && item.facingScore > 0
+      item.destination.name === nearestCenteredName && item.facingScore > 0
         ? Math.pow(
-          Math.max(0, 1 - distanceFromCenter / (Math.min(dimensions.width, dimensions.height) * 0.34)),
-          2
-        )
+            Math.max(
+              0,
+              1 - distanceFromCenter / (Math.min(dimensions.width, dimensions.height) * 0.34)
+            ),
+            2
+          )
         : 0;
-    const manualScale =
-  nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
+    const manualScale = nonActiveScale + (DESKTOP_ACTIVE_CARD_SCALE - nonActiveScale) * centerInfluence;
 
     // A selected card must finish at its actual globe coordinate. Multiplying by
     // facingScore leaves part of the decorative offset in place and stops it off-centre.
