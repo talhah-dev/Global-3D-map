@@ -518,15 +518,15 @@ export default function Home() {
   const frontCards = positioned.filter((item) => item.isFront);
 
   return (
-    <div className="relative w-screen min-h-screen bg-white overflow-hidden">
+    <div className="relative w-screen h-[100dvh] bg-white overflow-hidden">
       {mounted && isDesktop && (
-        <div className="hidden w-full pt-10 md:block">
+        <div className="hidden w-full md:block">
           <div
             className="pointer-events-none relative origin-center w-full"
             style={{
               transform: `scale(${DESKTOP_GLOBE_SCALE})`,
               transformOrigin: "center center",
-              height: "100vh",
+              height: "100dvh",
               boxSizing: "border-box",
             }}
           >
