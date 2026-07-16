@@ -34,7 +34,7 @@ const DESKTOP_CARD_STACK_GAP = 28;
 const DESKTOP_CARD_COMPACTNESS = 0.35;
 const GLOBE_FOCUS_DURATION_MS = 2600;
 const DEFAULT_DESKTOP_DESTINATION = "Bahamas";
-const DESKTOP_ACTIVE_CARD_SCALE = 1.7;
+const DESKTOP_ACTIVE_CARD_SCALE = 1.9;
 const DESKTOP_INACTIVE_CARD_BASE_SCALE = 0.36;
 const DESKTOP_INACTIVE_CARD_FRONT_BOOST = 0.22;
 
@@ -504,7 +504,8 @@ export default function Home() {
             2
           )
         : 0;
-    const manualScale = nonActiveScale + (DESKTOP_ACTIVE_CARD_SCALE - nonActiveScale) * centerInfluence;
+    const manualScale =
+  nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
 
     // A selected card must finish at its actual globe coordinate. Multiplying by
     // facingScore leaves part of the decorative offset in place and stops it off-centre.
