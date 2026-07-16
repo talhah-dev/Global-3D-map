@@ -160,7 +160,7 @@ function DestinationCard({
         opacity,
         zIndex,
         transform: `translate(-50%, -50%) scale(${scale})`,
-        transition: "opacity 80ms linear, transform 180ms cubic-bezier(0.33, 1, 0.68, 1)"
+        transition: "opacity 200ms linear, transform 1200ms cubic-bezier(0.16, 1, 0.3, 1)"
       }}
       onClick={onClick}
     >
@@ -507,9 +507,7 @@ export default function Home() {
         : 0;
     const manualScale =
       nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
-
-    // A selected card must finish at its actual globe coordinate. Multiplying by
-    // facingScore leaves part of the decorative offset in place and stops it off-centre.
+      
     const t = activationProgressRef.current[item.destination.name] ?? 0;
 
     return {
