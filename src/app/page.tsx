@@ -250,7 +250,7 @@ export default function Home() {
     ) as HTMLDivElement[];
 
     const blockWheel = (event: WheelEvent) => {
-      event.preventDefault();
+      if (event.ctrlKey) event.preventDefault();
     };
 
     nodes.forEach((node) => {
@@ -507,7 +507,7 @@ export default function Home() {
         : 0;
     const manualScale =
       nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
-      
+
     const t = activationProgressRef.current[item.destination.name] ?? 0;
 
     return {
