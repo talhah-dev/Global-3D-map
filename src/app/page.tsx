@@ -26,24 +26,29 @@ type OrbitDestination = {
 
 const CARD_WIDTH = 230;
 const CARD_HEIGHT = 135;
-const DESKTOP_GLOBE_SCALE = 1.5;
+const DESKTOP_GLOBE_SCALE = 1.3;
 const DESKTOP_GLOBE_VERTICAL_PADDING = 0;
 const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
 const DESKTOP_CARD_SPREAD = 220;
 const DESKTOP_CARD_STACK_GAP = 28;
+const DESKTOP_CARD_COMPACTNESS = 0.35;
 const GLOBE_FOCUS_DURATION_MS = 2600;
+const DEFAULT_DESKTOP_DESTINATION = "Bahamas";
+const DESKTOP_ACTIVE_CARD_SCALE = 1.7;
+const DESKTOP_INACTIVE_CARD_BASE_SCALE = 0.36;
+const DESKTOP_INACTIVE_CARD_FRONT_BOOST = 0.22;
 
 const DESKTOP_DESTINATION_OFFSETS: Record<
   string,
   { x: number; y: number; scale?: number }
 > = {
-  Bahamas: { x: 80, y: -150 },
-  Mexico: { x: -300, y: -70 },
-  "Costa Rica": { x: -120, y: 170 },
-  "Puerto Rico": { x: 250, y: -115 },
-  Caribbean: { x: 320, y: 95 },
-  Barbuda: { x: 520, y: 70 },
-  Europe: { x: 10, y: -250, scale: 0.92 },
+  Bahamas: { x: 80 * DESKTOP_CARD_COMPACTNESS, y: -150 * DESKTOP_CARD_COMPACTNESS },
+  Mexico: { x: -300 * DESKTOP_CARD_COMPACTNESS, y: -70 * DESKTOP_CARD_COMPACTNESS },
+  "Costa Rica": { x: -120 * DESKTOP_CARD_COMPACTNESS, y: 170 * DESKTOP_CARD_COMPACTNESS },
+  "Puerto Rico": { x: 250 * DESKTOP_CARD_COMPACTNESS, y: -115 * DESKTOP_CARD_COMPACTNESS },
+  Caribbean: { x: 320 * DESKTOP_CARD_COMPACTNESS, y: 95 * DESKTOP_CARD_COMPACTNESS },
+  Barbuda: { x: 520 * DESKTOP_CARD_COMPACTNESS, y: 70 * DESKTOP_CARD_COMPACTNESS },
+  Europe: { x: 10 * DESKTOP_CARD_COMPACTNESS, y: -250 * DESKTOP_CARD_COMPACTNESS, scale: 0.42 },
 };
 
 const DESTINATIONS: OrbitDestination[] = [
@@ -152,7 +157,7 @@ function DestinationCard({
         height: CARD_HEIGHT,
         opacity,
         transform: `translate(-50%, -50%) scale(${scale})`,
-        transition: "opacity 80ms linear",
+        transition: "opacity 80ms linear, transform 180ms cubic-bezier(0.33, 1, 0.68, 1)"
       }}
       onClick={onClick}
     >
@@ -179,6 +184,8 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [activeDestination, setActiveDestination] = useState<string | null>(null);
   const activeDestinationRef = useRef<string | null>(null);
+  const focusDestinationRef = useRef<string | null>(DEFAULT_DESKTOP_DESTINATION);
+  const initialDesktopFocusRef = useRef(false);
   const prevAngleRef = useRef(0);
   const activationProgressRef = useRef<Record<string, number>>({});
   const [activationTick, setActivationTick] = useState(0);
@@ -209,6 +216,7 @@ export default function Home() {
     if (!destination || !globeRef.current) return;
 
     activeDestinationRef.current = name;
+    focusDestinationRef.current = name;
     activationStartRef.current = performance.now();
     setActivationT(0);
     setActiveDestination(name);
@@ -302,7 +310,41 @@ export default function Home() {
     const fixedDistance = globeRef.current.camera().position.length();
     controls.minDistance = fixedDistance;
     controls.maxDistance = fixedDistance;
-  }, [countries]);
+
+    const releaseClickedFocus = () => {
+      activeDestinationRef.current = null;
+      focusDestinationRef.current = null;
+      activationStartRef.current = null;
+      setActivationT(0);
+      setActiveDestination(null);
+      setActivationTick((n) => n + 1);
+    };
+
+    controls.addEventListener("start", releaseClickedFocus);
+
+    if (isDesktop && !initialDesktopFocusRef.current) {
+      const destination = DESTINATIONS.find(
+        (item) => item.name === DEFAULT_DESKTOP_DESTINATION
+      );
+      if (destination) {
+        activeDestinationRef.current = null;
+        focusDestinationRef.current = destination.name;
+        activationStartRef.current = null;
+        activationProgressRef.current[destination.name] = 1;
+        initialDesktopFocusRef.current = true;
+        setActiveDestination(destination.name);
+        setActivationTick((n) => n + 1);
+        globeRef.current.pointOfView(
+          { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
+          0
+        );
+      }
+    }
+
+    return () => {
+      controls.removeEventListener("start", releaseClickedFocus);
+    };
+  }, [countries, isDesktop]);
 
   useEffect(() => {
     let frameId: number;
@@ -319,23 +361,27 @@ export default function Home() {
       }
 
       const activeName = activeDestinationRef.current;
-      let activeProgress = activeName ? 1 : 0;
+      const focusName = activeName ?? focusDestinationRef.current;
+      let activeProgress = 1;
 
       if (activeName && activationStartRef.current !== null) {
         const elapsed = performance.now() - activationStartRef.current;
         const linearT = Math.min(elapsed / GLOBE_FOCUS_DURATION_MS, 1);
         activeProgress = easeInOutCubic(linearT);
         setActivationT(activeProgress);
-        if (linearT >= 1) activationStartRef.current = null;
+        if (linearT >= 1) {
+          activationStartRef.current = null;
+          activeDestinationRef.current = null;
+        }
       }
 
       const resetSpeed = 0.08;
       let changed = false;
       DESTINATIONS.forEach((d) => {
         const current = activationProgressRef.current[d.name] ?? 0;
-        const target = d.name === activeName ? activeProgress : 0;
+        const target = d.name === focusName ? activeProgress : 0;
         const next =
-          d.name === activeName ? target : current + (target - current) * resetSpeed;
+          d.name === focusName ? target : current + (target - current) * resetSpeed;
         if (Math.abs(next - target) < 0.001) {
           activationProgressRef.current[d.name] = target;
         } else {
@@ -383,6 +429,20 @@ export default function Home() {
     return { destination, x, y, facingScore };
   });
 
+  const nearestCenteredName = rawPositioned
+    .filter((item) => item.facingScore > 0)
+    .reduce<{ name: string; distance: number } | null>((nearest, item) => {
+      const distance =
+        (item.x - dimensions.width / 2) ** 2 +
+        (item.y - dimensions.height / 2) ** 2;
+
+      if (!nearest || distance < nearest.distance) {
+        return { name: item.destination.name, distance };
+      }
+
+      return nearest;
+    }, null)?.name;
+
   const maxFacingScore = rawPositioned.length
     ? Math.max(...rawPositioned.map((item) => item.facingScore))
     : 1;
@@ -396,7 +456,10 @@ export default function Home() {
     const emphasis = Math.pow(closenessToLeader, 4);
     const centerX = dimensions.width / 2;
     const centerY = dimensions.height / 2;
-    const spread = (1 - Math.max(0, item.facingScore)) * DESKTOP_CARD_SPREAD;
+    const spread =
+      (1 - Math.max(0, item.facingScore)) *
+      DESKTOP_CARD_SPREAD *
+      DESKTOP_CARD_COMPACTNESS;
     const offsetX = item.x - centerX;
     const offsetY = item.y - centerY;
     const offsetLength = Math.sqrt(offsetX ** 2 + offsetY ** 2) || 1;
@@ -406,13 +469,36 @@ export default function Home() {
     const stackIndex = DESTINATIONS.findIndex(
       (destination) => destination.name === item.destination.name
     );
-    const stackOffsetX = (stackIndex % 2 === 0 ? -1 : 1) * DESKTOP_CARD_STACK_GAP * 0.5;
-    const stackOffsetY = Math.floor(stackIndex / 2) * DESKTOP_CARD_STACK_GAP * 0.7;
+    const stackOffsetX =
+      (stackIndex % 2 === 0 ? -1 : 1) *
+      DESKTOP_CARD_STACK_GAP *
+      0.5 *
+      DESKTOP_CARD_COMPACTNESS;
+    const stackOffsetY =
+      Math.floor(stackIndex / 2) *
+      DESKTOP_CARD_STACK_GAP *
+      0.7 *
+      DESKTOP_CARD_COMPACTNESS;
 
     const nonActiveX = x + stackOffsetX + (desktopOffset?.x ?? 0);
     const nonActiveY = y + stackOffsetY + (desktopOffset?.y ?? 0);
-    const nonActiveScale = (desktopOffset?.scale ?? 0.5) + emphasis * 1.0;
+    const nonActiveScale =
+      (desktopOffset?.scale ?? DESKTOP_INACTIVE_CARD_BASE_SCALE) +
+      emphasis * DESKTOP_INACTIVE_CARD_FRONT_BOOST;
     const nonActiveOpacity = 0.15 + emphasis * 0.85;
+    const focusName = activeDestinationRef.current ?? focusDestinationRef.current;
+    const distanceFromCenter = Math.sqrt(
+      (item.x - centerX) ** 2 + (item.y - centerY) ** 2
+    );
+    const centerInfluence =
+      !focusName && item.destination.name === nearestCenteredName && item.facingScore > 0
+        ? Math.pow(
+          Math.max(0, 1 - distanceFromCenter / (Math.min(dimensions.width, dimensions.height) * 0.34)),
+          2
+        )
+        : 0;
+    const manualScale =
+  nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
 
     // A selected card must finish at its actual globe coordinate. Multiplying by
     // facingScore leaves part of the decorative offset in place and stops it off-centre.
@@ -423,7 +509,7 @@ export default function Home() {
       x: nonActiveX + (item.x - nonActiveX) * t,
       y: nonActiveY + (item.y - nonActiveY) * t,
       isFront,
-      scale: nonActiveScale + (1.6 - nonActiveScale) * t,
+      scale: manualScale + (DESKTOP_ACTIVE_CARD_SCALE - manualScale) * t,
       opacity: nonActiveOpacity + (1 - nonActiveOpacity) * t,
     };
   });
@@ -432,7 +518,7 @@ export default function Home() {
   const frontCards = positioned.filter((item) => item.isFront);
 
   return (
-    <div className="relative w-screen min-h-screen bg-white overflow-x-hidden overflow-y-auto">
+    <div className="relative w-screen min-h-screen bg-white overflow-hidden">
       {mounted && isDesktop && (
         <div className="hidden w-full pt-10 md:block">
           <div
