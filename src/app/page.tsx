@@ -136,6 +136,7 @@ function DestinationCard({
   y,
   scale,
   opacity,
+  zIndex = 0,
   onClick,
 }: {
   name: string;
@@ -144,6 +145,7 @@ function DestinationCard({
   y: number;
   scale: number;
   opacity: number;
+  zIndex?: number;
   onClick?: () => void;
 }) {
   return (
@@ -156,6 +158,7 @@ function DestinationCard({
         width: CARD_WIDTH,
         height: CARD_HEIGHT,
         opacity,
+        zIndex,
         transform: `translate(-50%, -50%) scale(${scale})`,
         transition: "opacity 80ms linear, transform 180ms cubic-bezier(0.33, 1, 0.68, 1)"
       }}
@@ -486,7 +489,8 @@ export default function Home() {
       (desktopOffset?.scale ?? DESKTOP_INACTIVE_CARD_BASE_SCALE) +
       emphasis * DESKTOP_INACTIVE_CARD_FRONT_BOOST;
     const nonActiveOpacity = 0.15 + emphasis * 0.85;
-    const focusName = activeDestinationRef.current ?? focusDestinationRef.current;
+    const focusName =
+      activeDestinationRef.current ?? focusDestinationRef.current ?? nearestCenteredName;
     const distanceFromCenter = Math.sqrt(
       (item.x - centerX) ** 2 + (item.y - centerY) ** 2
     );
@@ -511,6 +515,8 @@ export default function Home() {
       isFront,
       scale: manualScale + (DESKTOP_ACTIVE_CARD_SCALE - manualScale) * t,
       opacity: nonActiveOpacity + (1 - nonActiveOpacity) * t,
+      zIndex:
+        item.destination.name === focusName ? 50 : isFront ? 30 : 20,
     };
   });
 
@@ -540,6 +546,7 @@ export default function Home() {
                   y={item.y}
                   scale={item.scale}
                   opacity={item.opacity}
+                  zIndex={item.zIndex}
                   onClick={() => rotateToDestination(item.destination.name)}
                 />
               ))}
@@ -572,6 +579,7 @@ export default function Home() {
                   y={item.y}
                   scale={item.scale}
                   opacity={item.opacity}
+                  zIndex={item.zIndex}
                   onClick={() => rotateToDestination(item.destination.name)}
                 />
               ))}
