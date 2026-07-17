@@ -193,7 +193,7 @@ export default function Home() {
   const activationProgressRef = useRef<Record<string, number>>({});
   const [activationTick, setActivationTick] = useState(0);
   const isDesktop = dimensions.width >= 768;
-  const mobileGlobeHeight = Math.min(dimensions.height * 0.76, 620);
+  const mobileGlobeHeight = Math.min(dimensions.height * 0.62, 520);
   const destinationImages: Record<string, string> = {
     Bahamas: "/bahamas.png",
     Mexico: "/mexico.png",
@@ -591,7 +591,7 @@ export default function Home() {
       )}
 
       {mounted && !isDesktop && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center md:hidden">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-4 md:hidden">
           <div
             className="pointer-events-auto relative w-full"
             style={{ height: mobileGlobeHeight }}
@@ -613,8 +613,8 @@ export default function Home() {
       )}
 
       {mounted && !isDesktop && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center md:hidden">
-          <div className="pointer-events-auto h-[70vh] w-full max-w-sm px-4">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center pt-[20vh] md:hidden">
+          <div className="pointer-events-auto h-[34vh] w-full max-w-sm px-4 -mt-[6vh]">
             <CountryMobileImageSwiper
               images={
                 DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
