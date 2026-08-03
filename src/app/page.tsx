@@ -18,40 +18,19 @@ interface CountryFeature {
   geometry: any;
 }
 
-type OrbitDestination = {
+type Destination = {
   name: string;
   lat: number;
   lng: number;
 };
 
-const CARD_WIDTH = 230;
-const CARD_HEIGHT = 135;
-const DESKTOP_GLOBE_SCALE = 1.3;
-const DESKTOP_GLOBE_VERTICAL_PADDING = 0;
-const DESKTOP_GLOBE_SMOOTHNESS = 0.09;
-const DESKTOP_CARD_SPREAD = 220;
-const DESKTOP_CARD_STACK_GAP = 28;
-const DESKTOP_CARD_COMPACTNESS = 0.35;
-const GLOBE_FOCUS_DURATION_MS = 2600;
-const DEFAULT_DESKTOP_DESTINATION = "Bahamas";
-const DESKTOP_ACTIVE_CARD_SCALE = 1.7;
-const DESKTOP_INACTIVE_CARD_BASE_SCALE = 0.36;
-const DESKTOP_INACTIVE_CARD_FRONT_BOOST = 0.22;
+const CARD_WIDTH = 340;
+const CARD_HEIGHT = 200;
+const CARD_GAP = 24;
+const MARQUEE_SPEED = 0.5;
+const TEXTURE_CACHE_KEY = "dotted-globe-texture-v6";
 
-const DESKTOP_DESTINATION_OFFSETS: Record<
-  string,
-  { x: number; y: number; scale?: number }
-> = {
-  Bahamas: { x: 80 * DESKTOP_CARD_COMPACTNESS, y: -150 * DESKTOP_CARD_COMPACTNESS },
-  Mexico: { x: -300 * DESKTOP_CARD_COMPACTNESS, y: -70 * DESKTOP_CARD_COMPACTNESS },
-  "Costa Rica": { x: -120 * DESKTOP_CARD_COMPACTNESS, y: 170 * DESKTOP_CARD_COMPACTNESS },
-  "Puerto Rico": { x: 250 * DESKTOP_CARD_COMPACTNESS, y: -115 * DESKTOP_CARD_COMPACTNESS },
-  Caribbean: { x: 320 * DESKTOP_CARD_COMPACTNESS, y: 95 * DESKTOP_CARD_COMPACTNESS },
-  Barbuda: { x: 520 * DESKTOP_CARD_COMPACTNESS, y: 70 * DESKTOP_CARD_COMPACTNESS },
-  Europe: { x: 10 * DESKTOP_CARD_COMPACTNESS, y: -250 * DESKTOP_CARD_COMPACTNESS, scale: 0.42 },
-};
-
-const DESTINATIONS: OrbitDestination[] = [
+const DESTINATIONS: Destination[] = [
   { name: "Bahamas", lat: 25.0343, lng: -77.3963 },
   { name: "Mexico", lat: 23.6345, lng: -102.5528 },
   { name: "Costa Rica", lat: 9.7489, lng: -83.7534 },
@@ -61,15 +40,11 @@ const DESTINATIONS: OrbitDestination[] = [
   { name: "Europe", lat: 54.526, lng: 15.2551 },
 ];
 
-const TEXTURE_CACHE_KEY = "dotted-globe-texture-v5";
-
 function isPointInRing(lng: number, lat: number, ring: number[][]) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
     const intersect =
       yi > lat !== yj > lat &&
       lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
@@ -79,15 +54,10 @@ function isPointInRing(lng: number, lat: number, ring: number[][]) {
 }
 
 function isPointInFeature(lng: number, lat: number, feature: CountryFeature) {
-  const geometry = feature.geometry;
-  if (geometry.type === "Polygon") {
-    return isPointInRing(lng, lat, geometry.coordinates[0]);
-  }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.some((polygon: number[][][]) =>
-      isPointInRing(lng, lat, polygon[0])
-    );
-  }
+  const { geometry } = feature;
+  if (geometry.type === "Polygon") return isPointInRing(lng, lat, geometry.coordinates[0]);
+  if (geometry.type === "MultiPolygon")
+    return geometry.coordinates.some((poly: number[][][]) => isPointInRing(lng, lat, poly[0]));
   return false;
 }
 
@@ -95,7 +65,7 @@ function buildDottedGlobeTexture(features: CountryFeature[]): string {
   const width = 1536;
   const height = 768;
   const step = 3;
-  const dotRadius = 0.8;
+  const dotRadius = 0.95;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -105,14 +75,13 @@ function buildDottedGlobeTexture(features: CountryFeature[]): string {
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#4cc9c4";
+  ctx.fillStyle = "#2ab8b2";
 
   for (let y = step / 2; y < height; y += step) {
     const lat = 90 - (y / height) * 180;
     for (let x = step / 2; x < width; x += step) {
       const lng = (x / width) * 360 - 180;
-      const isLand = features.some((f) => isPointInFeature(lng, lat, f));
-      if (isLand) {
+      if (features.some((f) => isPointInFeature(lng, lat, f))) {
         ctx.beginPath();
         ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -123,77 +92,24 @@ function buildDottedGlobeTexture(features: CountryFeature[]): string {
   return canvas.toDataURL("image/png");
 }
 
-function easeInOutCubic(t: number) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-
-
-function DestinationCard({
-  name,
-  image,
-  x,
-  y,
-  scale,
-  opacity,
-  zIndex = 0,
-  onClick,
-}: {
-  name: string;
-  image: string | undefined;
-  x: number;
-  y: number;
-  scale: number;
-  opacity: number;
-  zIndex?: number;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      className={`pointer-events-auto absolute overflow-hidden rounded-sm shadow-xl ${onClick ? "cursor-pointer" : ""
-        }`}
-      style={{
-        left: x,
-        top: y,
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        opacity,
-        zIndex,
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transition: "opacity 200ms linear, transform 1200ms cubic-bezier(0.16, 1, 0.3, 1)"
-      }}
-      onClick={onClick}
-    >
-      {image ? (
-        <img src={image} alt={name} className="h-full w-full object-cover" />
-      ) : (
-        <div className="h-full w-full bg-gradient-to-br from-teal-100 via-slate-100 to-slate-200" />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
-      <p className="font-gyst absolute bottom-3 left-4 text-lg font-light text-white">{name}</p>
-    </div>
-  );
-}
-
 export default function Home() {
   const globeRef = useRef<any>(null);
-  const activationStartRef = useRef<number | null>(null);
-  const [activationT, setActivationT] = useState(0);
   const [countries, setCountries] = useState<{ features: CountryFeature[] }>({ features: [] });
   const [globeTexture, setGlobeTexture] = useState<string>("");
   const [globeMaterial, setGlobeMaterial] = useState<any>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [rotationDeg, setRotationDeg] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const [activeDestination, setActiveDestination] = useState<string | null>(null);
-  const activeDestinationRef = useRef<string | null>(null);
-  const focusDestinationRef = useRef<string | null>(DEFAULT_DESKTOP_DESTINATION);
-  const initialDesktopFocusRef = useRef(false);
-  const prevAngleRef = useRef(0);
-  const activationProgressRef = useRef<Record<string, number>>({});
-  const [activationTick, setActivationTick] = useState(0);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const marqueeRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef<number>(0);
+  const isPausedRef = useRef<boolean>(false);
+  const frameRef = useRef<number>(0);
+  const expandedCardRef = useRef<string | null>(null);
+
   const isDesktop = dimensions.width >= 768;
-  const mobileGlobeHeight = Math.min(dimensions.height * 0.62, 520);
+
   const destinationImages: Record<string, string> = {
     Bahamas: "/bahamas.png",
     Mexico: "/mexico.png",
@@ -204,6 +120,21 @@ export default function Home() {
     Europe: "/europe.png",
   };
 
+  const openCard = (name: string) => {
+    setIsClosing(false);
+    setExpandedCard(name);
+    expandedCardRef.current = name;
+  };
+
+  const closeCard = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setExpandedCard(null);
+      setIsClosing(false);
+      expandedCardRef.current = null;
+    }, 260);
+  };
+
   useEffect(() => {
     setMounted(true);
     const update = () => setDimensions({ width: window.innerWidth, height: window.innerHeight });
@@ -212,353 +143,100 @@ export default function Home() {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const desktopWrapperRef = useRef<HTMLDivElement>(null);
-  const mobileWrapperRef = useRef<HTMLDivElement>(null);
-  const rotateToDestination = (name: string) => {
-    const destination = DESTINATIONS.find((item) => item.name === name);
-    if (!destination || !globeRef.current) return;
-
-    activeDestinationRef.current = name;
-    focusDestinationRef.current = name;
-    activationStartRef.current = performance.now();
-    setActivationT(0);
-    setActiveDestination(name);
-    globeRef.current.pointOfView(
-      { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
-      GLOBE_FOCUS_DURATION_MS
-    );
-  };
-
-
-
-
-  const rotateToGlobePoint = (coords: { lat: number; lng: number }) => {
-    if (!globeRef.current) return;
-    activeDestinationRef.current = null;
-    activationStartRef.current = null;
-    setActivationT(0);
-    setActiveDestination(null);
-    globeRef.current.pointOfView(
-      { lat: coords.lat, lng: coords.lng, altitude: 2.2 },
-      GLOBE_FOCUS_DURATION_MS
-    );
-  };
-
-  useEffect(() => {
-    const nodes = [desktopWrapperRef.current, mobileWrapperRef.current].filter(
-      Boolean
-    ) as HTMLDivElement[];
-
-    const blockWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) event.preventDefault();
-    };
-
-    nodes.forEach((node) => {
-      node.addEventListener("wheel", blockWheel, { passive: false });
-    });
-
-    return () => {
-      nodes.forEach((node) => {
-        node.removeEventListener("wheel", blockWheel);
-      });
-    };
-  }, [mounted, isDesktop]);
-
   useEffect(() => {
     fetch("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson")
-      .then((res) => res.json())
-      .then((data) => setCountries(data));
+      .then((r) => r.json())
+      .then(setCountries);
   }, []);
 
   useEffect(() => {
-    if (countries.features.length === 0) return;
-
+    if (!countries.features.length) return;
     const cached = window.localStorage.getItem(TEXTURE_CACHE_KEY);
-    if (cached) {
-      setGlobeTexture(cached);
-      return;
-    }
-
+    if (cached) { setGlobeTexture(cached); return; }
     const texture = buildDottedGlobeTexture(countries.features);
     setGlobeTexture(texture);
-    try {
-      window.localStorage.setItem(TEXTURE_CACHE_KEY, texture);
-    } catch (_) { }
+    try { window.localStorage.setItem(TEXTURE_CACHE_KEY, texture); } catch (_) { }
   }, [countries]);
 
   useEffect(() => {
     if (!globeTexture) return;
-
     import("three").then((THREE) => {
       const loader = new THREE.TextureLoader();
-      loader.load(globeTexture, (texture) => {
-        setGlobeMaterial(new THREE.MeshBasicMaterial({ map: texture }));
+      loader.load(globeTexture, (tex) => {
+        setGlobeMaterial(new THREE.MeshBasicMaterial({ map: tex }));
       });
     });
   }, [globeTexture]);
 
   useEffect(() => {
-    if (!globeRef.current || countries.features.length === 0) return;
+    if (!globeRef.current || !countries.features.length) return;
     const controls = globeRef.current.controls();
-    controls.enableRotate = true;
-    controls.enableDamping = true;
-    controls.autoRotate = false;
+    controls.enableRotate = false;
     controls.enableZoom = false;
     controls.enablePan = false;
-    controls.zoomSpeed = 0;
-    // controls.rotateSpeed = 1 - DESKTOP_GLOBE_SMOOTHNESS * 4;
-    // controls.dampingFactor = DESKTOP_GLOBE_SMOOTHNESS;
-    controls.rotateSpeed = 0.12;
-    controls.dampingFactor = 0.08;
-    const fixedDistance = globeRef.current.camera().position.length();
-    controls.minDistance = fixedDistance;
-    controls.maxDistance = fixedDistance;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = -2;
+    controls.enableDamping = false;
+  }, [countries, globeRef.current]);
 
-    const releaseClickedFocus = () => {
-      activeDestinationRef.current = null;
-      focusDestinationRef.current = null;
-      activationStartRef.current = null;
-      setActivationT(0);
-      setActiveDestination(null);
-      setActivationTick((n) => n + 1);
-    };
-
-    controls.addEventListener("start", releaseClickedFocus);
-
-    if (isDesktop && !initialDesktopFocusRef.current) {
-      const destination = DESTINATIONS.find(
-        (item) => item.name === DEFAULT_DESKTOP_DESTINATION
-      );
-      if (destination) {
-        activeDestinationRef.current = null;
-        focusDestinationRef.current = destination.name;
-        activationStartRef.current = null;
-        activationProgressRef.current[destination.name] = 1;
-        initialDesktopFocusRef.current = true;
-        setActiveDestination(destination.name);
-        setActivationTick((n) => n + 1);
-        globeRef.current.pointOfView(
-          { lat: destination.lat, lng: destination.lng, altitude: 2.2 },
-          0
-        );
-      }
-    }
-
-    return () => {
-      controls.removeEventListener("start", releaseClickedFocus);
-    };
-  }, [countries, isDesktop]);
+  const totalWidth = DESTINATIONS.length * (CARD_WIDTH + CARD_GAP);
 
   useEffect(() => {
-    let frameId: number;
+    if (!isDesktop) return;
 
-    const tick = () => {
-      const controls = globeRef.current?.controls();
-      if (controls) {
-        const angle = controls.getAzimuthalAngle();
-        let delta = angle - prevAngleRef.current;
-        if (delta > Math.PI) delta -= Math.PI * 2;
-        if (delta < -Math.PI) delta += Math.PI * 2;
-        prevAngleRef.current = angle;
-        setRotationDeg((prev) => prev - delta * (180 / Math.PI));
+    const animate = () => {
+      if (!isPausedRef.current && !expandedCardRef.current) {
+        offsetRef.current += MARQUEE_SPEED;
+        if (offsetRef.current >= totalWidth) offsetRef.current -= totalWidth;
       }
-
-      const activeName = activeDestinationRef.current;
-      const focusName = activeName ?? focusDestinationRef.current;
-      let activeProgress = 1;
-
-      if (activeName && activationStartRef.current !== null) {
-        const elapsed = performance.now() - activationStartRef.current;
-        const linearT = Math.min(elapsed / GLOBE_FOCUS_DURATION_MS, 1);
-        activeProgress = easeInOutCubic(linearT);
-        setActivationT(activeProgress);
-        if (linearT >= 1) {
-          activationStartRef.current = null;
-          activeDestinationRef.current = null;
-        }
+      if (marqueeRef.current) {
+        marqueeRef.current.style.transform = `translateX(${-offsetRef.current}px)`;
       }
-
-      const resetSpeed = 0.08;
-      let changed = false;
-      DESTINATIONS.forEach((d) => {
-        const current = activationProgressRef.current[d.name] ?? 0;
-        const target = d.name === focusName ? activeProgress : 0;
-        const next =
-          d.name === focusName ? target : current + (target - current) * resetSpeed;
-        if (Math.abs(next - target) < 0.001) {
-          activationProgressRef.current[d.name] = target;
-        } else {
-          activationProgressRef.current[d.name] = next;
-          changed = true;
-        }
-      });
-      if (changed) setActivationTick((n) => n + 1);
-
-      frameId = requestAnimationFrame(tick);
+      frameRef.current = requestAnimationFrame(animate);
     };
 
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
+    frameRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [isDesktop, totalWidth]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && expandedCardRef.current) closeCard();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  const rawPositioned = DESTINATIONS.map((destination) => {
-    const screenCoords = globeRef.current?.getScreenCoords(destination.lat, destination.lng, 0.18);
-    const globeCoords = globeRef.current?.getCoords(destination.lat, destination.lng, 0.18);
-    const x = screenCoords?.x ?? dimensions.width / 2;
-    const y =
-      (screenCoords?.y ?? dimensions.height / 2) + DESKTOP_GLOBE_VERTICAL_PADDING;
-
-    let facingScore = 0;
-
-    if (globeRef.current?.camera()?.position && globeCoords) {
-      const cameraPosition = globeRef.current.camera().position;
-      const camLength = Math.sqrt(
-        cameraPosition.x ** 2 + cameraPosition.y ** 2 + cameraPosition.z ** 2
-      );
-      const pointLength = Math.sqrt(
-        globeCoords.x ** 2 + globeCoords.y ** 2 + globeCoords.z ** 2
-      );
-
-      if (camLength > 0 && pointLength > 0) {
-        const dot =
-          globeCoords.x * cameraPosition.x +
-          globeCoords.y * cameraPosition.y +
-          globeCoords.z * cameraPosition.z;
-
-        facingScore = dot / (camLength * pointLength);
-      }
-    }
-
-    return { destination, x, y, facingScore };
-  });
-
-  const nearestCenteredName = rawPositioned
-    .filter((item) => item.facingScore > 0)
-    .reduce<{ name: string; distance: number } | null>((nearest, item) => {
-      const distance =
-        (item.x - dimensions.width / 2) ** 2 +
-        (item.y - dimensions.height / 2) ** 2;
-
-      if (!nearest || distance < nearest.distance) {
-        return { name: item.destination.name, distance };
-      }
-
-      return nearest;
-    }, null)?.name;
-
-  const maxFacingScore = rawPositioned.length
-    ? Math.max(...rawPositioned.map((item) => item.facingScore))
-    : 1;
-
-  const positioned = rawPositioned.map((item) => {
-    const isFront = item.facingScore > 0;
-    const closenessToLeader =
-      maxFacingScore > -1
-        ? Math.max(0, (item.facingScore - -1) / (maxFacingScore - -1))
-        : 0;
-    const emphasis = Math.pow(closenessToLeader, 4);
-    const centerX = dimensions.width / 2;
-    const centerY = dimensions.height / 2;
-    const spread =
-      (1 - Math.max(0, item.facingScore)) *
-      DESKTOP_CARD_SPREAD *
-      DESKTOP_CARD_COMPACTNESS;
-    const offsetX = item.x - centerX;
-    const offsetY = item.y - centerY;
-    const offsetLength = Math.sqrt(offsetX ** 2 + offsetY ** 2) || 1;
-    const x = item.x + (offsetX / offsetLength) * spread;
-    const y = item.y + (offsetY / offsetLength) * spread * 0.65;
-    const desktopOffset = DESKTOP_DESTINATION_OFFSETS[item.destination.name];
-    const stackIndex = DESTINATIONS.findIndex(
-      (destination) => destination.name === item.destination.name
-    );
-    const stackOffsetX =
-      (stackIndex % 2 === 0 ? -1 : 1) *
-      DESKTOP_CARD_STACK_GAP *
-      0.5 *
-      DESKTOP_CARD_COMPACTNESS;
-    const stackOffsetY =
-      Math.floor(stackIndex / 2) *
-      DESKTOP_CARD_STACK_GAP *
-      0.7 *
-      DESKTOP_CARD_COMPACTNESS;
-
-    const nonActiveX = x + stackOffsetX + (desktopOffset?.x ?? 0);
-    const nonActiveY = y + stackOffsetY + (desktopOffset?.y ?? 0);
-    const nonActiveScale =
-      (desktopOffset?.scale ?? DESKTOP_INACTIVE_CARD_BASE_SCALE) +
-      emphasis * DESKTOP_INACTIVE_CARD_FRONT_BOOST;
-    const nonActiveOpacity = 0.15 + emphasis * 0.85;
-    const focusName =
-      activeDestinationRef.current ?? focusDestinationRef.current ?? nearestCenteredName;
-    const distanceFromCenter = Math.sqrt(
-      (item.x - centerX) ** 2 + (item.y - centerY) ** 2
-    );
-    const centerInfluence =
-      !activeDestinationRef.current && !focusDestinationRef.current &&
-        item.destination.name === nearestCenteredName && item.facingScore > 0
-        ? Math.pow(
-          Math.max(
-            0,
-            1 - distanceFromCenter / (Math.min(dimensions.width, dimensions.height) * 0.34)
-          ),
-          2
-        )
-        : 0;
-    const manualScale =
-      nonActiveScale + (2.0 - nonActiveScale) * centerInfluence;
-
-    const t = activationProgressRef.current[item.destination.name] ?? 0;
-
-    return {
-      ...item,
-      x: nonActiveX + (item.x - nonActiveX) * t,
-      y: nonActiveY + (item.y - nonActiveY) * t,
-      isFront,
-      scale: manualScale + (DESKTOP_ACTIVE_CARD_SCALE - manualScale) * t,
-      opacity: nonActiveOpacity + (1 - nonActiveOpacity) * t,
-      zIndex:
-        item.destination.name === focusName ? 50 : isFront ? 30 : 20,
-    };
-  });
-
-  const backCards = positioned.filter((item) => !item.isFront);
-  const frontCards = positioned.filter((item) => item.isFront);
+  const doubledDestinations = [...DESTINATIONS, ...DESTINATIONS, ...DESTINATIONS];
+  const mobileGlobeHeight = Math.min(dimensions.height * 0.75, 680);
 
   return (
     <div className="relative w-screen h-[100dvh] bg-white overflow-hidden">
-      {mounted && isDesktop && (
-        <div className="hidden w-full md:block">
-          <div
-            className="pointer-events-none relative origin-center w-full"
-            style={{
-              transform: `scale(${DESKTOP_GLOBE_SCALE})`,
-              transformOrigin: "center center",
-              height: "100dvh",
-              boxSizing: "border-box",
-            }}
-          >
-            <div className="pointer-events-none absolute inset-0 z-20">
-              {backCards.map((item) => (
-                <DestinationCard
-                  key={item.destination.name}
-                  name={item.destination.name}
-                  image={destinationImages[item.destination.name]}
-                  x={item.x}
-                  y={item.y}
-                  scale={item.scale}
-                  opacity={item.opacity}
-                  zIndex={item.zIndex}
-                  onClick={() => rotateToDestination(item.destination.name)}
-                />
-              ))}
-            </div>
 
-            <div
-              className="relative z-10 h-full w-full pointer-events-auto"
-              onWheelCapture={(event) => event.preventDefault()}
-              ref={desktopWrapperRef}
-            >
+      <style>{`
+        @keyframes overlayIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes overlayOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        @keyframes cardIn {
+          from { opacity: 0; transform: scale(0.88); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes cardOut {
+          from { opacity: 1; transform: scale(1); }
+          to { opacity: 0; transform: scale(0.88); }
+        }
+      `}</style>
+
+      {mounted && isDesktop && (
+        <div className="hidden md:block w-full h-full">
+
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div style={{ width: dimensions.width, height: dimensions.height }}>
               <Globe
                 ref={globeRef}
                 width={dimensions.width}
@@ -567,65 +245,128 @@ export default function Home() {
                 globeMaterial={globeMaterial}
                 showAtmosphere={false}
                 showGraticules={false}
-                onGlobeClick={rotateToGlobePoint}
               />
             </div>
+          </div>
 
-            <div className="pointer-events-none absolute inset-0 z-30">
-              {frontCards.map((item) => (
-                <DestinationCard
-                  key={item.destination.name}
-                  name={item.destination.name}
-                  image={destinationImages[item.destination.name]}
-                  x={item.x}
-                  y={item.y}
-                  scale={item.scale}
-                  opacity={item.opacity}
-                  zIndex={item.zIndex}
-                  onClick={() => rotateToDestination(item.destination.name)}
-                />
+          <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden">
+            <div
+              className="flex pointer-events-auto"
+              ref={marqueeRef}
+              style={{ willChange: "transform" }}
+              onMouseEnter={() => { isPausedRef.current = true; }}
+              onMouseLeave={() => { isPausedRef.current = false; }}
+            >
+              {doubledDestinations.map((dest, i) => (
+                <div
+                  key={`${dest.name}-${i}`}
+                  className="shrink-0 cursor-pointer overflow-hidden rounded-sm shadow-xl relative"
+                  style={{
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    marginRight: CARD_GAP,
+                    transition: "transform 300ms ease, box-shadow 300ms ease",
+                  }}
+                  onClick={() => openCard(dest.name)}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1.04)";
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = "0 20px 60px rgba(0,0,0,0.25)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = "";
+                  }}
+                >
+                  {destinationImages[dest.name] ? (
+                    <img
+                      src={destinationImages[dest.name]}
+                      alt={dest.name}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-teal-100 to-slate-200" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                  <p className="font-gyst absolute bottom-3 left-4 text-lg font-light text-white select-none">
+                    {dest.name}
+                  </p>
+                </div>
               ))}
             </div>
           </div>
+
+          {expandedCard && (
+            <div
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm cursor-pointer"
+              style={{
+                animation: `${isClosing ? "overlayOut" : "overlayIn"} 280ms cubic-bezier(0.16, 1, 0.3, 1) both`,
+              }}
+              onClick={closeCard}
+            >
+              <div
+                className="relative overflow-hidden rounded-md shadow-2xl cursor-default"
+                style={{
+                  width: "min(720px, 85vw)",
+                  aspectRatio: "16/9",
+                  animation: `${isClosing ? "cardOut" : "cardIn"} 300ms cubic-bezier(0.16, 1, 0.3, 1) both`,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src={destinationImages[expandedCard]}
+                  alt={expandedCard}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                <p className="font-gyst absolute bottom-5 left-6 text-3xl font-light text-white">
+                  {expandedCard}
+                </p>
+                <button
+                  className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none cursor-pointer"
+                  onClick={closeCard}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {mounted && !isDesktop && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-4 md:hidden">
-          <div
-            className="pointer-events-auto relative w-full"
-            style={{ height: mobileGlobeHeight }}
-            ref={mobileWrapperRef}
-            onWheelCapture={(event) => event.preventDefault()}
-          >
-            <Globe
-              ref={globeRef}
-              width={dimensions.width}
-              height={mobileGlobeHeight}
-              backgroundColor="rgba(0,0,0,0)"
-              globeMaterial={globeMaterial}
-              showAtmosphere={false}
-              showGraticules={false}
-              onGlobeClick={rotateToGlobePoint}
-            />
+        <>
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-4 md:hidden">
+            <div
+              className="pointer-events-auto relative w-full"
+              style={{ height: mobileGlobeHeight }}
+            >
+              <Globe
+                ref={globeRef}
+                width={dimensions.width}
+                height={mobileGlobeHeight}
+                backgroundColor="rgba(0,0,0,0)"
+                globeMaterial={globeMaterial}
+                showAtmosphere={false}
+                showGraticules={false}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      {mounted && !isDesktop && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center pt-[20vh] md:hidden">
-          <div className="pointer-events-auto h-[34vh] w-full max-w-sm px-4 -mt-[6vh]">
-            <CountryMobileImageSwiper
-              images={
-                DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
-              }
-              labels={DESTINATIONS.map((d) => d.name)}
-              alt="Featured destination"
-              onImageLoad={() => { }}
-              onImageError={() => { }}
-            />
+          <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center md:hidden">
+  <div className="pointer-events-auto h-auto w-full max-w-sm px-4 mt-[28vh]">
+              <CountryMobileImageSwiper
+                images={
+                  DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
+                }
+                labels={DESTINATIONS.map((d) => d.name)}
+                alt="Featured destination"
+                onImageLoad={() => { }}
+                onImageError={() => { }}
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
