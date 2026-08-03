@@ -26,7 +26,7 @@ type Destination = {
 
 const CARD_WIDTH = 340;
 const CARD_HEIGHT = 200;
-const CARD_GAP = 24;
+const CARD_GAP = 10;
 const MARQUEE_SPEED = 0.5;
 const TEXTURE_CACHE_KEY = "dotted-globe-texture-v6";
 
@@ -116,7 +116,7 @@ export default function Home() {
     "Costa Rica": "/costa-rica.png",
     "Puerto Rico": "/puerto-rico.png",
     Caribbean: "/caribbean.png",
-    Barbuda: "/barbuda1.jpeg",
+    Barbuda: "/barbuda1.png",
     Europe: "/europe.png",
   };
 
@@ -175,7 +175,7 @@ export default function Home() {
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = -2;
+    controls.autoRotateSpeed = -2.5;
     controls.enableDamping = false;
   }, [countries, globeRef.current]);
 
@@ -251,7 +251,7 @@ export default function Home() {
 
           <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden">
             <div
-              className="flex pointer-events-auto"
+              className="flex items-center pointer-events-auto"
               ref={marqueeRef}
               style={{ willChange: "transform" }}
               onMouseEnter={() => { isPausedRef.current = true; }}
@@ -263,8 +263,9 @@ export default function Home() {
                   className="shrink-0 cursor-pointer overflow-hidden rounded-sm shadow-xl relative"
                   style={{
                     width: CARD_WIDTH,
-                    height: CARD_HEIGHT,
+                    height: i % 2 === 0 ? CARD_HEIGHT : CARD_HEIGHT * 0.85,
                     marginRight: CARD_GAP,
+                    alignSelf: "center",
                     transition: "transform 300ms ease, box-shadow 300ms ease",
                   }}
                   onClick={() => openCard(dest.name)}
@@ -354,7 +355,7 @@ export default function Home() {
           </div>
 
           <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center md:hidden">
-  <div className="pointer-events-auto h-auto w-full max-w-sm px-4 mt-[28vh]">
+            <div className="pointer-events-auto h-auto w-full max-w-sm px-4 mt-[28vh]">
               <CountryMobileImageSwiper
                 images={
                   DESTINATIONS.map((d) => destinationImages[d.name]).filter(Boolean) as string[]
