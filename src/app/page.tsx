@@ -180,6 +180,7 @@ export default function Home() {
   }, [countries, globeRef.current]);
 
   const totalWidth = DESTINATIONS.length * (CARD_WIDTH + CARD_GAP);
+  const desktopGlobeHeight = Math.min(dimensions.height, dimensions.width * 0.85);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -236,11 +237,11 @@ export default function Home() {
         <div className="hidden md:block w-full h-full">
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div style={{ width: dimensions.width, height: dimensions.height }}>
+            <div style={{ width: dimensions.width, height: desktopGlobeHeight }}>
               <Globe
                 ref={globeRef}
                 width={dimensions.width}
-                height={dimensions.height}
+                height={desktopGlobeHeight}
                 backgroundColor="rgba(0,0,0,0)"
                 globeMaterial={globeMaterial}
                 showAtmosphere={false}
