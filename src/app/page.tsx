@@ -255,8 +255,8 @@ export default function Home() {
               className="flex items-center pointer-events-auto"
               ref={marqueeRef}
               style={{ willChange: "transform" }}
-              onMouseEnter={() => { isPausedRef.current = true; }}
-              onMouseLeave={() => { isPausedRef.current = false; }}
+              onMouseEnter={() => { isPausedRef.current = true; globeRef.current.controls().autoRotate = false; }}
+              onMouseLeave={() => { isPausedRef.current = false; globeRef.current.controls().autoRotate = true; }}
             >
               {doubledDestinations.map((dest, i) => (
                 <div
@@ -264,7 +264,7 @@ export default function Home() {
                   className="shrink-0 cursor-pointer overflow-hidden rounded-sm shadow-xl relative"
                   style={{
                     width: CARD_WIDTH,
-                    height: i % 2 === 0 ? CARD_HEIGHT : CARD_HEIGHT * 0.85,
+                    height: i % 2 === 0 ? CARD_HEIGHT : CARD_HEIGHT * 0.80,
                     marginRight: CARD_GAP,
                     alignSelf: "center",
                     transition: "transform 300ms ease, box-shadow 300ms ease",
@@ -373,3 +373,4 @@ export default function Home() {
     </div>
   );
 }
+
