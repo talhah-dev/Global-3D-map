@@ -111,13 +111,13 @@ export default function Home() {
   const isDesktop = dimensions.width >= 768;
 
   const destinationImages: Record<string, string> = {
-    Bahamas: "/bahamas.png",
-    Mexico: "/mexico.png",
-    "Costa Rica": "/costa-rica.png",
-    "Puerto Rico": "/puerto-rico.png",
+    Bahamas: "/bahamas.jpg",
+    Mexico: "/mexico.jpg",
+    "Costa Rica": "/costa-rica.jpg",
+    "Puerto Rico": "/puerto-rico.jpg",
     Caribbean: "/caribbean.png",
     Barbuda: "/barbuda1.png",
-    Europe: "/europe.png",
+    Europe: "/europe.jpg",
   };
 
   const openCard = (name: string) => {
