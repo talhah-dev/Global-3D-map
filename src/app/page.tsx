@@ -340,7 +340,7 @@ export default function Home() {
         <>
           <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-4 md:hidden">
             <div
-              className="pointer-events-auto relative w-full"
+              className="pointer-events-none relative w-full"
               style={{ height: mobileGlobeHeight }}
             >
               <Globe
