@@ -112,6 +112,44 @@ export function CountryMobileImageSwiper({
   useEffect(() => {
     if (!emblaApi) return;
 
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const stopAutoplay = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+    };
+
+    const startAutoplay = () => {
+      stopAutoplay();
+      timer = setInterval(() => {
+        if (emblaApi.canScrollNext()) {
+          emblaApi.scrollNext();
+        } else {
+          emblaApi.scrollTo(0);
+        }
+      }, 2000);
+    };
+
+    const onPointerDown = () => stopAutoplay();
+    const onPointerUp = () => startAutoplay();
+
+    startAutoplay();
+
+    emblaApi.on("pointerDown", onPointerDown);
+    emblaApi.on("pointerUp", onPointerUp);
+
+    return () => {
+      stopAutoplay();
+      emblaApi.off("pointerDown", onPointerDown);
+      emblaApi.off("pointerUp", onPointerUp);
+    };
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+
     const handleUpdate = () => applyScale(emblaApi);
 
     applyScale(emblaApi);
