@@ -178,7 +178,7 @@ export default function Home() {
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = -2.5;
+    controls.autoRotateSpeed = -1.4;
     controls.enableDamping = false;
   }, [countries, globeRef.current]);
 
