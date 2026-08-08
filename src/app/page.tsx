@@ -24,10 +24,10 @@ type Destination = {
   lng: number;
 };
 
-const CARD_WIDTH = 340;
-const CARD_HEIGHT = 200;
+const CARD_WIDTH = 480;
+const CARD_HEIGHT = 320;
 const CARD_GAP = 10;
-const MARQUEE_SPEED = 0.5;
+const MARQUEE_SPEED = 0.25;
 const TEXTURE_CACHE_KEY = "dotted-globe-texture-v6";
 
 const DESTINATIONS: Destination[] = [
@@ -101,12 +101,15 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const marqueeRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef<number>(0);
   const isPausedRef = useRef<boolean>(false);
   const frameRef = useRef<number>(0);
   const expandedCardRef = useRef<string | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartXRef = useRef<number>(0);
 
   const isDesktop = dimensions.width >= 768;
 
@@ -180,7 +183,7 @@ export default function Home() {
   }, [countries, globeRef.current]);
 
   const totalWidth = DESTINATIONS.length * (CARD_WIDTH + CARD_GAP);
-  const desktopGlobeHeight = Math.min(dimensions.height, dimensions.width * 0.85);
+  const desktopGlobeHeight = dimensions.height;
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -189,6 +192,7 @@ export default function Home() {
       if (!isPausedRef.current && !expandedCardRef.current) {
         offsetRef.current += MARQUEE_SPEED;
         if (offsetRef.current >= totalWidth) offsetRef.current -= totalWidth;
+        if (offsetRef.current < 0) offsetRef.current += totalWidth;
       }
       if (marqueeRef.current) {
         marqueeRef.current.style.transform = `translateX(${-offsetRef.current}px)`;
@@ -199,6 +203,54 @@ export default function Home() {
     frameRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameRef.current);
   }, [isDesktop, totalWidth]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = e.clientX - dragStartXRef.current;
+      dragStartXRef.current = e.clientX;
+
+      offsetRef.current -= delta;
+      if (offsetRef.current >= totalWidth) offsetRef.current -= totalWidth;
+      if (offsetRef.current < 0) offsetRef.current += totalWidth;
+
+      if (globeRef.current) {
+        const controls = globeRef.current.controls();
+        controls.autoRotate = false;
+        const rotateAmount = delta * 0.002;
+        globeRef.current.pointOfView(
+          { ...globeRef.current.pointOfView(), lng: globeRef.current.pointOfView().lng - rotateAmount * 50 },
+          0
+        );
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      isPausedRef.current = false;
+      setIsDragging(false);
+      if (globeRef.current) {
+        globeRef.current.controls().autoRotate = true;
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseleave", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseleave", handleMouseUp);
+    };
+  }, [totalWidth]);
+
+  const handleMarqueeMouseDown = (e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    isPausedRef.current = true;
+    setIsDragging(true);
+  };
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -237,7 +289,7 @@ export default function Home() {
         <div className="hidden md:block w-full h-full">
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div style={{ width: dimensions.width, height: desktopGlobeHeight }}>
+            <div className="h-full" style={{ width: dimensions.width, height: desktopGlobeHeight }}>
               <Globe
                 ref={globeRef}
                 width={dimensions.width}
@@ -252,16 +304,17 @@ export default function Home() {
 
           <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden">
             <div
-              className="flex items-center pointer-events-auto"
+              className={`flex items-center pointer-events-auto ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
               ref={marqueeRef}
               style={{ willChange: "transform" }}
+              onMouseDown={handleMarqueeMouseDown}
               onMouseEnter={() => { isPausedRef.current = true; globeRef.current.controls().autoRotate = false; }}
-              onMouseLeave={() => { isPausedRef.current = false; globeRef.current.controls().autoRotate = true; }}
+              onMouseLeave={() => { if (!isDraggingRef.current) { isPausedRef.current = false; globeRef.current.controls().autoRotate = true; } }}
             >
               {doubledDestinations.map((dest, i) => (
                 <div
                   key={`${dest.name}-${i}`}
-                  className="shrink-0 cursor-pointer overflow-hidden rounded-sm shadow-xl relative"
+                  className="shrink-0 cursor-pointer overflow-hidden shadow-xl relative"
                   style={{
                     width: CARD_WIDTH,
                     height: i % 2 === 0 ? CARD_HEIGHT : CARD_HEIGHT * 0.80,
@@ -269,7 +322,7 @@ export default function Home() {
                     alignSelf: "center",
                     transition: "transform 300ms ease, box-shadow 300ms ease",
                   }}
-                  onClick={() => openCard(dest.name)}
+                  onClick={() => { if (!isDraggingRef.current) openCard(dest.name); }}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLDivElement).style.transform = "scale(1.04)";
                     (e.currentTarget as HTMLDivElement).style.boxShadow = "0 20px 60px rgba(0,0,0,0.25)";
@@ -373,4 +426,3 @@ export default function Home() {
     </div>
   );
 }
-

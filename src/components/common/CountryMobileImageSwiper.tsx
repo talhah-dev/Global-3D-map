@@ -190,7 +190,7 @@ export function CountryMobileImageSwiper({
   if (!hasImages) {
     return (
       <div className="relative mx-auto flex h-full w-full flex-col items-center justify-center">
-        <div className="aspect-[16/9] w-[92%] max-w-md animate-pulse rounded-sm bg-gray-100" />
+        <div className="aspect-[16/9] w-[92%] max-w-md animate-pulse bg-gray-100" />
       </div>
     );
   }
@@ -210,11 +210,11 @@ export function CountryMobileImageSwiper({
                 style={{ zIndex: Math.round(scale * 100) }}
               >
                 <div
-                  className="relative aspect-[16/9] w-full origin-center overflow-hidden rounded-sm bg-white shadow-xl"
+                  className="relative aspect-[16/9] w-full origin-center overflow-hidden bg-white shadow-xl"
                   style={{ transform: `scale(${scale})` }}
                 >
                   {!isCurrentLoaded && (
-                    <div className="absolute inset-0 rounded-sm bg-gray-100 animate-pulse" />
+                    <div className="absolute inset-0  bg-gray-100 animate-pulse" />
                   )}
                   <img
                     src={src}
